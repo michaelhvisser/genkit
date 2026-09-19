@@ -14,20 +14,38 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""OpenTelemetry backend for Genkit traces.
+"""OpenTelemetry instrumentation and backend for Genkit.
 
-Application code should call :class:`genkit.Genkit`. Use this package
-when you want Cloud Trace or your own OpenTelemetry provider.
+Configure ``GenAiInstrumentation`` before creating ``Genkit``, and let
+the application own the OpenTelemetry SDK:
 
-Example:
-    from genkit.telemetry import configure_instrumentation
-    from genkit_otel import OtelInstrumentation
+```python
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 
-    configure_instrumentation(OtelInstrumentation())
+from genkit import Genkit
+from genkit.telemetry import configure_instrumentation
+from genkit_otel import GenAiInstrumentation
+
+trace.set_tracer_provider(TracerProvider())
+trace.get_tracer_provider().add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
+
+configure_instrumentation(GenAiInstrumentation())
+ai = Genkit()
+```
+
+It emits ``gen_ai.*`` spans and metrics following the
+[OTel GenAI semantic conventions](https://github.com/open-telemetry/semantic-conventions-genai).
+It composes freely with the built-in Developer UI poster (they export
+to separate pipelines).
 """
 
+from genkit_otel._genai_instrumentation import GenAiInstrumentation
 from genkit_otel._provider import OtelInstrumentation
 
 __all__ = [
+    'GenAiInstrumentation',
     'OtelInstrumentation',
 ]
