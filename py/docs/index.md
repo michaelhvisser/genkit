@@ -7,89 +7,51 @@
 
 ::: genkit.Genkit
 
-::: genkit.Plugin
-
-::: genkit.Action
-
-::: genkit.Flow
-
-::: genkit.ActionKind
-
-::: genkit.ActionRunContext
-
-::: genkit.ExecutablePrompt
-
-::: genkit.PromptGenerateOptions
-
-::: genkit.Tool
-
-::: genkit.tool
-
-::: genkit.respond_to_interrupt
-
-::: genkit.restart_tool
-
-::: genkit.ToolRunContext
-
-::: genkit.StreamResponse
-
-::: genkit.ModelStreamResponse
-
-::: genkit.GenkitError
-
-::: genkit.PublicError
-
-::: genkit.Interrupt
-
 ::: genkit.Message
+
+::: genkit.Role
 
 ::: genkit.Part
 
 ::: genkit.Media
 
-::: genkit.Role
-
-::: genkit.Metadata
-
-::: genkit.ToolRequest
-
-::: genkit.ToolResponse
-
-::: genkit.ToolDefinition
-
-::: genkit.ToolChoice
-
 ::: genkit.Document
-
-::: genkit.EmbedderRef
-
-::: genkit.EmbedderInfo
-
-::: genkit.Embedding
-
-::: genkit.EmbedRequest
-
-::: genkit.EmbedResponse
-
-::: genkit.ModelRequest
 
 ::: genkit.ModelResponse
 
 ::: genkit.ModelResponseChunk
 
-::: genkit.ModelConfigDict
-
-::: genkit.ModelInfo
-
-::: genkit.ModelUsage
-
-::: genkit.Constrained
-
-::: genkit.Stage
-
-::: genkit.Supports
+::: genkit.ModelStreamResponse
 
 ::: genkit.FinishReason
+
+::: genkit.tool
+
+::: genkit.Tool
+
+::: genkit.ToolRunContext
+
+::: genkit.Interrupt
+
+::: genkit.respond_to_interrupt
+
+::: genkit.restart_tool
+
+::: genkit.response
+
+::: genkit.MultipartToolResponse
+
+::: genkit.ActionRunContext
+
+::: genkit.ExecutablePrompt
+
+::: genkit.GenkitError
+
+::: genkit.PublicError
+
+::: genkit.ContextProvider
+
+::: genkit.RequestData
 
 ## genkit.model
 
@@ -107,11 +69,9 @@
 
 ::: genkit.model.FinishReason
 
-::: genkit.model.GenerateActionOptions
-
-::: genkit.model.Error
-
 ::: genkit.model.Operation
+
+::: genkit.model.OperationError
 
 ::: genkit.model.ToolRequest
 
@@ -133,9 +93,7 @@
 
 ::: genkit.model.ModelRef
 
-::: genkit.model.ModelConfigDict
-
-::: genkit.model.Message
+::: genkit.model.ModelConfig
 
 ::: genkit.model.get_basic_usage_stats
 
@@ -163,17 +121,17 @@
 
 ::: genkit.plugin_api.Action
 
+::: genkit.plugin_api.Flow
+
+::: genkit.plugin_api.StreamResponse
+
 ::: genkit.plugin_api.ActionMetadata
 
 ::: genkit.plugin_api.ActionKind
 
-::: genkit.plugin_api.ActionRunContext
-
 ::: genkit.plugin_api.StatusCodes
 
 ::: genkit.plugin_api.StatusName
-
-::: genkit.plugin_api.GenkitError
 
 ::: genkit.plugin_api.GENKIT_CLIENT_HEADER
 
@@ -181,47 +139,25 @@
 
 ::: genkit.plugin_api.loop_local_client
 
-::: genkit.plugin_api.tracer
-
-::: genkit.plugin_api.add_custom_exporter
-
-::: genkit.plugin_api.AdjustingTraceExporter
-
-::: genkit.plugin_api.RedactedSpan
-
-::: genkit.plugin_api.to_display_path
-
 ::: genkit.plugin_api.to_json_schema
 
 ::: genkit.plugin_api.get_cached_client
 
 ::: genkit.plugin_api.get_callable_json
 
-::: genkit.plugin_api.is_dev_environment
+## genkit.telemetry
 
-::: genkit.plugin_api.model_action_metadata
+::: genkit.telemetry.AdjustingTraceExporter
 
-::: genkit.plugin_api.model_ref
+::: genkit.telemetry.RedactedSpan
 
-::: genkit.plugin_api.ModelConfig
+::: genkit.telemetry.add_custom_exporter
 
-::: genkit.plugin_api.ModelRef
+::: genkit.telemetry.tracer
 
-::: genkit.plugin_api.embedder_action_metadata
+::: genkit.telemetry.to_display_path
 
-::: genkit.plugin_api.embedder_ref
-
-::: genkit.plugin_api.EmbedderRef
-
-::: genkit.plugin_api.evaluator_action_metadata
-
-::: genkit.plugin_api.evaluator_ref
-
-::: genkit.plugin_api.EvaluatorRef
-
-::: genkit.plugin_api.ContextProvider
-
-::: genkit.plugin_api.RequestData
+::: genkit.telemetry.is_dev_environment
 
 ## genkit.evaluator
 

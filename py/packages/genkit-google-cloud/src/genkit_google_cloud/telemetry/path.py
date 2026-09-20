@@ -37,7 +37,8 @@ import structlog
 from opentelemetry import metrics
 from opentelemetry.sdk.trace import ReadableSpan
 
-from genkit.plugin_api import GENKIT_VERSION, to_display_path
+from genkit.plugin_api import GENKIT_VERSION
+from genkit.telemetry import to_display_path
 
 from .gcp_logger import gcp_logger
 from .utils import (

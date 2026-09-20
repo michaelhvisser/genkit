@@ -36,7 +36,7 @@ from genkit_google_cloud.telemetry.utils import (
 )
 from opentelemetry.trace import TraceFlags
 
-from genkit.plugin_api import to_display_path
+from genkit.telemetry import to_display_path
 
 
 # ---------------------------------------------------------------------------

@@ -20,7 +20,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from genkit import ErrorResponseMetadata
 from genkit._core import _error as error_mod
 from genkit._core._error import (
     GenkitError,
@@ -32,6 +31,7 @@ from genkit._core._error import (
     parse_retry_after_ms,
     wrap_http_error,
 )
+from genkit.plugin_api import ErrorResponseMetadata
 
 
 def test_genkit_error() -> None:
