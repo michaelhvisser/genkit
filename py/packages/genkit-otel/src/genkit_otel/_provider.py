@@ -33,13 +33,13 @@ from opentelemetry.sdk.trace.export import SpanExporter
 from opentelemetry.trace import Link, NoOpTracer, NoOpTracerProvider, ProxyTracerProvider, Span, SpanKind, StatusCode
 from opentelemetry.util import types
 
-from .._environment import is_dev_environment
-from .._error import GenkitError, GenkitInterrupt
-from .._logger import get_logger
-from ._attrs import Attr, State, metadata_key
-from ._default_exporter import create_span_processor
-from ._path import build_path
-from .instrumentation import (
+from genkit._core._environment import is_dev_environment
+from genkit._core._error import GenkitError, GenkitInterrupt
+from genkit._core._logger import get_logger
+from genkit._core._telemetry._attrs import Attr, State, metadata_key
+from genkit._core._telemetry._default_exporter import create_span_processor
+from genkit._core._telemetry._path import build_path
+from genkit._core._telemetry.instrumentation import (
     SpanMetadata,
     SpanNext,
     configure_instrumentation,
@@ -308,5 +308,4 @@ class PluginTracer:
         return getattr(self.inner(), name)
 
 
-# Plugins import this as ``from genkit.plugin_api import tracer``.
 tracer = PluginTracer()

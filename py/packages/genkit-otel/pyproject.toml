@@ -1,4 +1,4 @@
-# Copyright 2025 Google LLC
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,9 +17,6 @@
 [project]
 authors = [
   { name = "Google" },
-  { name = "Yesudeep Mangalapilly", email = "yesudeep@google.com" },
-  { name = "Elisa Shen", email = "mengqin@google.com" },
-  { name = "Niraj Nepal", email = "nnepal@google.com" },
 ]
 classifiers = [
   "Development Status :: 4 - Beta",
@@ -44,24 +41,19 @@ classifiers = [
   "License :: OSI Approved :: Apache Software License",
 ]
 dependencies = [
-  "genkit",
-  "genkit-otel",
-  "google-genai>=2.14.0,<3",
-  "google-cloud-aiplatform>=1.77.0",
-  "structlog>=25.2.0",
-  "strenum>=0.4.15; python_version < '3.11'",
+  "genkit>=0.7.0",
+  "opentelemetry-api>=1.29.0",
+  "opentelemetry-sdk>=1.29.0",
+  "opentelemetry-instrumentation-logging>=0.60b1",
 ]
-description = "Gemini, Imagen, and Veo on Genkit"
+description = "OpenTelemetry backend for Genkit traces"
 keywords = [
   "genkit",
-  "gemini",
-  "imagen",
-  "veo",
-  "vertex-ai",
-  "google",
+  "opentelemetry",
+  "observability",
 ]
 license = "Apache-2.0"
-name = "genkit-google-genai"
+name = "genkit-otel"
 readme = "README.md"
 requires-python = ">=3.10"
 version = "0.11.0"
@@ -78,5 +70,5 @@ build-backend = "hatchling.build"
 requires      = ["hatchling"]
 
 [tool.hatch.build.targets.wheel]
-only-include = ["src/genkit_google_genai"]
+only-include = ["src/genkit_otel"]
 sources      = ["src"]

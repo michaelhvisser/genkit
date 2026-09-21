@@ -433,10 +433,10 @@ def genkit_dev_instrumentation() -> Instrumentation | None:
 def enable_dev_instrumentation_for_server(*, url: str) -> None:
     """Turn on the Developer UI poster from a handshake / notify URL.
 
-    No-op when the URL is empty or the poster is already registered, so a
-    leftover env-injected builtin and a later notify cannot double-post.
-    A leftover ``GENKIT_TELEMETRY_SERVER`` in production (no builtin yet)
-    does not block this — today's handshake URL still fills the Traces tab.
+    No-op when the URL is empty or the poster is already registered, so
+    ``Genkit()`` under ``genkit start`` and a later notify cannot double-post.
+    A ``GENKIT_TELEMETRY_SERVER`` already in the production shell (no poster
+    yet) does not block this — today's handshake URL still fills the Traces tab.
     """
     if not url:
         return
@@ -446,7 +446,7 @@ def enable_dev_instrumentation_for_server(*, url: str) -> None:
 
 
 def connect_developer_ui_collector(*, url: str) -> None:
-    """Handshake / notify entry. Same leftover as ``enable_dev_instrumentation_for_server``."""
+    """Handshake / notify entry. Same wiring as ``enable_dev_instrumentation_for_server``."""
     enable_dev_instrumentation_for_server(url=url)
 
 

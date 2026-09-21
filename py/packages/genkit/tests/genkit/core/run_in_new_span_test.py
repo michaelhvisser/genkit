@@ -3,12 +3,7 @@
 # Copyright 2026 Google LLC
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for the fattened ``run_in_new_span`` helper and Action delegation.
-
-Covers attributes ``run_in_new_span`` writes (name, path, qualifiedPath, input, output, state,
-error, metadata) plus a regression test that ``Action._run_with_telemetry`` records
-the original exception text in ``genkit:error`` rather than the wrapped GenkitError message.
-"""
+"""What shows up on a span: path, input, output, errors, and redacted context."""
 
 import asyncio
 import json
@@ -36,8 +31,8 @@ from genkit._core._telemetry.instrumentation import (
     run_in_new_span,
     start_attributes,
 )
-from genkit._core._telemetry.otel import OtelInstrumentation, add_custom_exporter
 from genkit.telemetry import configure_instrumentation
+from genkit_otel import OtelInstrumentation, add_custom_exporter
 
 
 @pytest.fixture(autouse=True)
@@ -70,6 +65,7 @@ def exporter() -> Generator[InMemorySpanExporter, None, None]:
 
 
 def test_add_custom_exporter_does_not_register_renderer() -> None:
+    """add_custom_exporter alone does not turn tracing on."""
     reset_instrumentation()
     add_custom_exporter(InMemorySpanExporter(), 'test')
     assert not is_instrumented_by(OtelInstrumentation)
@@ -109,6 +105,7 @@ def test_start_attributes_includes_input_excludes_outcome() -> None:
 
 
 def test_start_attributes_json_input() -> None:
+    """A dict input is JSON on genkit:input."""
     attrs = start_attributes(
         SpanMetadata(name='echo', action_type='action', input={'msg': 'hi'}),
         qualified_path='/{echo,t:action}',
@@ -117,6 +114,7 @@ def test_start_attributes_json_input() -> None:
 
 
 def test_start_attributes_json_init() -> None:
+    """Agent init (session id) is JSON on genkit:init."""
     attrs = start_attributes(
         SpanMetadata(name='agentRun', action_type='action', init={'sessionId': 'session-123'}),
         qualified_path='/{agentRun,t:action}',
@@ -175,6 +173,8 @@ def test_realtime_on_start_export_carries_identity_attrs(
 
 @pytest.mark.asyncio
 async def test_writes_name_path_and_state_success(exporter: InMemorySpanExporter) -> None:
+    """A successful span has name, path, and state=success."""
+
     async def body(_span: object) -> None:
         return None
 

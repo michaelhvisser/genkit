@@ -45,6 +45,7 @@ classifiers = [
 ]
 dependencies = [
   "genkit",
+  "genkit-otel",
   "google-cloud-firestore>=2.14.0",
   "google-cloud-logging>=3.10.0",
   "opentelemetry-exporter-gcp-trace>=1.9.0",

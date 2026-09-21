@@ -12,7 +12,7 @@ import os
 import threading
 import time
 from collections.abc import Iterator
-from queue import Full
+from queue import Full, Queue
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -21,7 +21,10 @@ from structlog.testing import capture_logs
 
 from genkit._core._constants import GENKIT_VERSION
 from genkit._core._environment import GENKIT_ENV
-from genkit._core._logger import get_logger, is_debug_enabled
+from genkit._core._logger import configure_structlog_level, get_logger, is_debug_enabled
+from genkit._core._reflection_v2 import ReflectionServerV2
+from genkit._core._registry import Registry
+from genkit._core._telemetry import _log_exporter as log_exporter
 from genkit._core._telemetry._log_exporter import (
     BATCH_DELAY_S,
     GENKIT_OTEL_ENABLE_LOGS,
@@ -40,8 +43,9 @@ from genkit._core._telemetry._log_exporter import (
     reset_log_export,
 )
 from genkit._core._telemetry.instrumentation import reset_instrumentation, run_in_new_span
-from genkit._core._telemetry.otel import init_provider
-from genkit.telemetry import OtelInstrumentation, configure_instrumentation
+from genkit.telemetry import configure_instrumentation
+from genkit_otel import OtelInstrumentation
+from genkit_otel._provider import init_provider
 
 
 @pytest.fixture
@@ -196,11 +200,9 @@ def test_export_does_not_stall_on_hung_collector() -> None:
         assert elapsed < 0.5
         assert started.wait(timeout=1)
         release.set()
-        from genkit._core._telemetry._log_exporter import _exporter
-
-        assert _exporter is not None
-        assert _exporter.force_flush(timeout_s=2) is True
-        assert _exporter.last_result_ok is False
+        assert log_exporter._exporter is not None
+        assert log_exporter._exporter.force_flush(timeout_s=2) is True
+        assert log_exporter._exporter.last_result_ok is False
 
 
 @pytest.mark.usefixtures('_reset_export', '_dev_env')
@@ -209,12 +211,10 @@ def test_transport_failure_logs_one_error() -> None:
     enable_log_export(url='http://127.0.0.1:1')
     with capture_logs() as entries:
         emit_log(level=logging.INFO, event='hello', attrs={})
-        from genkit._core._telemetry._log_exporter import _exporter
-
-        assert _exporter is not None
-        assert _exporter.force_flush(timeout_s=2) is True
+        assert log_exporter._exporter is not None
+        assert log_exporter._exporter.force_flush(timeout_s=2) is True
         emit_log(level=logging.INFO, event='again', attrs={})
-        assert _exporter.force_flush(timeout_s=2) is True
+        assert log_exporter._exporter.force_flush(timeout_s=2) is True
 
     errors = [e for e in entries if 'Failed to export logs' in str(e.get('event', ''))]
     assert len(errors) == 1
@@ -225,19 +225,17 @@ def test_transport_failure_logs_one_error() -> None:
 def test_overflow_drops_and_warns_once() -> None:
     """A full queue drops the record and warns once — emit never blocks."""
     enable_log_export(url='http://127.0.0.1:1')
-    from genkit._core._telemetry._log_exporter import _exporter
-
-    assert _exporter is not None
+    assert log_exporter._exporter is not None
     record = build_log_record(level=logging.DEBUG, event='overflow', attrs={})
-    with patch.object(_exporter.queue, 'put_nowait', side_effect=Full):
+    with patch.object(log_exporter._exporter.queue, 'put_nowait', side_effect=Full):
         with capture_logs() as entries:
             t0 = time.perf_counter()
-            _exporter.enqueue(record=record)
-            _exporter.enqueue(record=record)
+            log_exporter._exporter.enqueue(record=record)
+            log_exporter._exporter.enqueue(record=record)
             assert time.perf_counter() - t0 < 0.2
         warnings = [e for e in entries if 'queue is full' in str(e.get('event', ''))]
         assert len(warnings) == 1
-        assert _exporter.dropped == 2
+        assert log_exporter._exporter.dropped == 2
 
 
 @pytest.mark.usefixtures('_reset_export', '_dev_env')
@@ -264,10 +262,8 @@ def test_posts_otlp_path_and_batches() -> None:
         enable_log_export(url='http://localhost:4033')
         emit_log(level=logging.DEBUG, event='a', attrs={'n': 1})
         emit_log(level=logging.INFO, event='b', attrs={})
-        from genkit._core._telemetry._log_exporter import _exporter
-
-        assert _exporter is not None
-        assert _exporter.force_flush(timeout_s=2) is True
+        assert log_exporter._exporter is not None
+        assert log_exporter._exporter.force_flush(timeout_s=2) is True
         assert posted.wait(timeout=2)
 
     mock_client.post.assert_called()
@@ -285,27 +281,25 @@ def test_posts_otlp_path_and_batches() -> None:
 def test_get_logger_tees_debug_when_console_is_info() -> None:
     """GENKIT_LOG=info keeps the TTY quiet; the Dev UI still gets debug."""
     enable_log_export(url='http://127.0.0.1:9')
-    from genkit._core._logger import configure_structlog_level
-    from genkit._core._telemetry._log_exporter import _exporter
 
     with patch.dict(os.environ, {'GENKIT_LOG': 'info'}):
         structlog_ok = configure_structlog_level()
         logger = get_logger('tee-test')
         assert is_debug_enabled(logger) is True
         queued: list[dict[str, object]] = []
-        assert _exporter is not None
-        original = _exporter.enqueue
+        assert log_exporter._exporter is not None
+        original = log_exporter._exporter.enqueue
 
         def capture(*, record: dict[str, object]) -> None:
             queued.append(record)
 
-        _exporter.enqueue = capture  # type: ignore[method-assign]
+        log_exporter._exporter.enqueue = capture  # type: ignore[method-assign]
         try:
             logger.debug('looking up weather', city='Paris')
             logger.error('Startup failed: %s: %s', 'ValueError', 'boom')
             logger.info('kept on console')
         finally:
-            _exporter.enqueue = original  # type: ignore[method-assign]
+            log_exporter._exporter.enqueue = original  # type: ignore[method-assign]
 
     events = [r['body']['stringValue'] for r in queued]  # type: ignore[index]
     assert 'looking up weather' in events
@@ -329,8 +323,6 @@ def test_worker_stops_when_client_construction_fails() -> None:
 def test_handshake_enables_log_export_when_env_url_missing() -> None:
     """Reflection register/configure URL turns on log export, same as traces."""
     os.environ.pop('GENKIT_TELEMETRY_SERVER', None)
-    from genkit._core._reflection_v2 import ReflectionServerV2
-    from genkit._core._registry import Registry
 
     with patch('genkit._core._reflection_v2.connect_developer_ui_collector'):
         server = ReflectionServerV2(registry=Registry(), ws_url='ws://localhost:1')
@@ -388,11 +380,10 @@ def test_build_log_record_redacts_camel_case_secrets() -> None:
 
 
 def test_put_poison_pill_lands_when_queue_is_full() -> None:
-    """Shutdown must stop the worker even if the last slot is a leftover record."""
-    from queue import Queue
+    """Shutdown stops the worker even if the queue is already full."""
 
     queue: Queue[dict[str, object] | None] = Queue(maxsize=1)
-    queue.put_nowait({'leftover': True})
+    queue.put_nowait({'queued': True})
     put_poison_pill(queue=queue)
     assert queue.get_nowait() is None
     queue.task_done()

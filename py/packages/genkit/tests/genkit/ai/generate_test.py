@@ -54,7 +54,8 @@ from genkit.middleware import (
     ToolHookParams,
 )
 from genkit.plugin_api import MiddlewarePlugin, new_middleware
-from genkit.telemetry import OtelInstrumentation, configure_instrumentation
+from genkit.telemetry import configure_instrumentation
+from genkit_otel import OtelInstrumentation
 
 
 def _to_dict(obj: object) -> object:

@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""runTurn / root agent span telemetry for store and client-managed agents."""
+"""Agent turn spans: session id on the root span, session state on runTurn."""
 
 from __future__ import annotations
 
@@ -38,9 +38,9 @@ from genkit._core._model import AgentInput, AgentResult, Message, SessionState
 from genkit._core._registry import Registry
 from genkit._core._telemetry._attrs import Attr, metadata_key
 from genkit._core._telemetry.instrumentation import reset_instrumentation
-from genkit._core._telemetry.otel import OtelInstrumentation
 from genkit.exp.agent import AgentFinishReason, InMemorySessionStore
 from genkit.telemetry import configure_instrumentation
+from genkit_otel import OtelInstrumentation
 
 UUID_RE = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.I)
 SESSION_ID_ATTR = metadata_key('agent:sessionId')
@@ -97,18 +97,21 @@ def _counter_agent(
 
 
 def test_session_mints_session_id_when_missing() -> None:
+    """Session() without a session_id assigns one."""
     session = Session()
     assert session.session_state.session_id
     assert UUID_RE.match(session.session_state.session_id)
 
 
 def test_session_preserves_existing_session_id() -> None:
+    """Session(state) keeps the session_id they already set."""
     session = Session(SessionState(session_id='keep-me', custom={'x': 1}))
     assert session.session_state.session_id == 'keep-me'
     assert session.session_state.custom == {'x': 1}
 
 
 def test_session_does_not_mutate_caller_state() -> None:
+    """Session(state) does not write a session_id back onto the object they passed in."""
     seed = SessionState(custom={'n': 1})
     session = Session(seed)
     assert session.session_state.session_id
@@ -119,6 +122,7 @@ def test_session_does_not_mutate_caller_state() -> None:
 async def test_run_turn_span_output_is_session_state_with_store(
     exporter: InMemorySpanExporter,
 ) -> None:
+    """Session store: root span has session id; runTurn output is the stored state."""
     registry = Registry()
     store = InMemorySessionStore()
     agent = _counter_agent(registry=registry, name='turnSpanStore', store=store)
@@ -149,6 +153,7 @@ async def test_run_turn_span_output_is_session_state_with_store(
 async def test_run_turn_span_output_is_session_state_client_managed(
     exporter: InMemorySpanExporter,
 ) -> None:
+    """No store: root span still has session id; runTurn output is the in-memory state."""
     registry = Registry()
     agent = _counter_agent(registry=registry, name='turnSpanClient', store=None)
 
@@ -176,6 +181,7 @@ async def test_run_turn_span_output_is_session_state_client_managed(
 
 @pytest.mark.asyncio
 async def test_client_managed_preserves_session_id_across_turns() -> None:
+    """Two send() calls on the same chat keep the same session_id."""
     registry = Registry()
     agent = _counter_agent(registry=registry, name='preserveClientSid', store=None)
 

@@ -36,7 +36,8 @@ from opentelemetry.sdk.resources import SERVICE_INSTANCE_ID, SERVICE_NAME, Resou
 from opentelemetry.sdk.trace.sampling import Sampler
 from opentelemetry.trace import get_current_span, span as trace_span
 
-from genkit.plugin_api import add_custom_exporter, is_dev_environment, maybe_configure_otel_for_exporters
+from genkit.plugin_api import is_dev_environment
+from genkit_otel import add_custom_exporter, maybe_configure_otel_for_exporters
 
 from .constants import (
     DEFAULT_METRIC_EXPORT_INTERVAL_MS,

@@ -103,8 +103,8 @@ class Instrumentation(Protocol):
 class DisposableInstrumentation(Protocol):
     """Optional: a provider that holds a subscription or client.
 
-    ``reset_instrumentation`` calls ``dispose`` so a leftover log handler
-    cannot keep posting after tests tear down.
+    ``reset_instrumentation`` calls ``dispose`` so a log handler from the
+    last run cannot keep posting after tests tear down.
     """
 
     def dispose(self) -> None: ...

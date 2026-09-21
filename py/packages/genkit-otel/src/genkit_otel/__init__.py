@@ -14,11 +14,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""On-switch for Genkit traces, and the protocol for a recording backend.
+"""OpenTelemetry backend for Genkit traces.
 
-Application code should call :class:`genkit.Genkit`. ``genkit start``
-records to the Developer UI. Configure a backend when you want Cloud
-Trace or your own OpenTelemetry provider.
+Application code should call :class:`genkit.Genkit`. Use this package
+when you want Cloud Trace or your own OpenTelemetry provider.
 
 Example:
     from genkit.telemetry import configure_instrumentation
@@ -27,16 +26,16 @@ Example:
     configure_instrumentation(OtelInstrumentation(tracer_provider=theirs))
 """
 
-from genkit._core._telemetry.instrumentation import (
-    Instrumentation,
-    SpanContext,
-    SpanMetadata,
-    configure_instrumentation,
+from genkit_otel._provider import (
+    OtelInstrumentation,
+    add_custom_exporter,
+    maybe_configure_otel_for_exporters,
+    tracer,
 )
 
 __all__ = [
-    'Instrumentation',
-    'SpanContext',
-    'SpanMetadata',
-    'configure_instrumentation',
+    'OtelInstrumentation',
+    'add_custom_exporter',
+    'maybe_configure_otel_for_exporters',
+    'tracer',
 ]

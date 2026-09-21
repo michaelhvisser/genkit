@@ -35,6 +35,7 @@ members = [
     "genkit-middleware",
     "genkit-ollama",
     "genkit-openai",
+    "genkit-otel",
     "genkit-vertexai",
     "genkit-workspace",
     "google-genai-deep-research",
@@ -1660,6 +1661,9 @@ ollama = [
 openai = [
     { name = "genkit-openai" },
 ]
+otel = [
+    { name = "genkit-otel" },
+]
 vertex-ai = [
     { name = "genkit-vertexai" },
 ]
@@ -1681,6 +1685,7 @@ requires-dist = [
     { name = "genkit-middleware", marker = "extra == 'middleware'", editable = "packages/genkit-middleware" },
     { name = "genkit-ollama", marker = "extra == 'ollama'", editable = "packages/genkit-ollama" },
     { name = "genkit-openai", marker = "extra == 'openai'", editable = "packages/genkit-openai" },
+    { name = "genkit-otel", marker = "extra == 'otel'", editable = "packages/genkit-otel" },
     { name = "genkit-vertexai", marker = "extra == 'vertex-ai'", editable = "packages/genkit-vertexai" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "json5", specifier = ">=0.10.0" },
@@ -1703,7 +1708,7 @@ requires-dist = [
     { name = "uvloop", marker = "sys_platform != 'win32'", specifier = ">=0.21.0" },
     { name = "websockets", specifier = ">=13.0.0" },
 ]
-provides-extras = ["a2ui", "amazon-bedrock", "anthropic", "django", "evaluators", "fastapi", "flask", "google-cloud", "google-genai", "middleware", "ollama", "openai", "vertex-ai"]
+provides-extras = ["a2ui", "amazon-bedrock", "anthropic", "django", "evaluators", "fastapi", "flask", "google-cloud", "google-genai", "middleware", "otel", "ollama", "openai", "vertex-ai"]
 
 [[package]]
 name = "genkit-a2ui"
@@ -1842,6 +1847,7 @@ version = "0.11.0"
 source = { editable = "packages/genkit-google-cloud" }
 dependencies = [
     { name = "genkit" },
+    { name = "genkit-otel" },
     { name = "google-cloud-firestore" },
     { name = "google-cloud-logging" },
     { name = "opentelemetry-exporter-gcp-monitoring" },
@@ -1852,6 +1858,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "genkit", editable = "packages/genkit" },
+    { name = "genkit-otel", editable = "packages/genkit-otel" },
     { name = "google-cloud-firestore", specifier = ">=2.14.0" },
     { name = "google-cloud-logging", specifier = ">=3.10.0" },
     { name = "opentelemetry-exporter-gcp-monitoring", specifier = ">=1.9.0" },
@@ -1865,6 +1872,7 @@ version = "0.11.0"
 source = { editable = "packages/genkit-google-genai" }
 dependencies = [
     { name = "genkit" },
+    { name = "genkit-otel" },
     { name = "google-cloud-aiplatform" },
     { name = "google-genai" },
     { name = "strenum", marker = "python_full_version < '3.11'" },
@@ -1874,6 +1882,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "genkit", editable = "packages/genkit" },
+    { name = "genkit-otel", editable = "packages/genkit-otel" },
     { name = "google-cloud-aiplatform", specifier = ">=1.77.0" },
     { name = "google-genai", specifier = ">=2.14.0,<3" },
     { name = "strenum", marker = "python_full_version < '3.11'", specifier = ">=0.4.15" },
@@ -1943,6 +1952,25 @@ requires-dist = [
 ]
 
 [[package]]
+name = "genkit-otel"
+version = "0.11.0"
+source = { editable = "packages/genkit-otel" }
+dependencies = [
+    { name = "genkit" },
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-instrumentation-logging" },
+    { name = "opentelemetry-sdk" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "genkit", editable = "packages/genkit" },
+    { name = "opentelemetry-api", specifier = ">=1.29.0" },
+    { name = "opentelemetry-instrumentation-logging", specifier = ">=0.60b1" },
+    { name = "opentelemetry-sdk", specifier = ">=1.29.0" },
+]
+
+[[package]]
 name = "genkit-vertexai"
 version = "0.11.0"
 source = { editable = "packages/genkit-vertexai" }
@@ -1990,6 +2018,7 @@ dependencies = [
     { name = "genkit-middleware" },
     { name = "genkit-ollama" },
     { name = "genkit-openai" },
+    { name = "genkit-otel" },
     { name = "genkit-vertexai" },
 ]
 
@@ -2057,6 +2086,7 @@ requires-dist = [
     { name = "genkit-middleware", editable = "packages/genkit-middleware" },
     { name = "genkit-ollama", editable = "packages/genkit-ollama" },
     { name = "genkit-openai", editable = "packages/genkit-openai" },
+    { name = "genkit-otel", editable = "packages/genkit-otel" },
     { name = "genkit-vertexai", editable = "packages/genkit-vertexai" },
 ]
 

@@ -3,12 +3,13 @@
 # Copyright 2026 Google LLC
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for the telemetry product contract."""
+"""Tests for genkit.telemetry and the OpenTelemetry backend."""
 
 from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import subprocess  # noqa: S404
 import sys
@@ -19,15 +20,17 @@ from typing import Any, TypeVar
 from unittest.mock import MagicMock
 
 import pytest
+from httpx import ASGITransport, AsyncClient
 from opentelemetry import trace as trace_api
 from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import NoOpTracerProvider
 
-from genkit import ActionKind, Genkit
+from genkit import ActionKind, Genkit, plugin_api, telemetry
 from genkit._core._action import Action
 from genkit._core._environment import GENKIT_ENV
+from genkit._core._reflection import create_reflection_asgi_app
 from genkit._core._reflection_v2 import ReflectionServerV2
 from genkit._core._registry import Registry
 from genkit._core._telemetry.http import (
@@ -48,12 +51,9 @@ from genkit._core._telemetry.instrumentation import (
     set_custom_metadata_attributes,
     set_span_state,
 )
-from genkit._core._telemetry.otel import (
-    add_custom_exporter,
-    init_provider,
-    maybe_configure_otel_for_exporters,
-)
-from genkit.telemetry import OtelInstrumentation, configure_instrumentation
+from genkit.telemetry import configure_instrumentation
+from genkit_otel import OtelInstrumentation, add_custom_exporter, maybe_configure_otel_for_exporters, tracer
+from genkit_otel._provider import init_provider
 
 T = TypeVar('T')
 
@@ -106,6 +106,27 @@ def _isolate_telemetry(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None,
         parent_path_context.reset(path_token)
         reset_instrumentation()
         isolated.shutdown()
+
+
+def test_otel_instrumentation_imports_from_genkit_otel_not_genkit_telemetry() -> None:
+    """from genkit.telemetry import OtelInstrumentation fails; the backend is genkit_otel."""
+    assert 'OtelInstrumentation' not in telemetry.__all__
+    assert not hasattr(telemetry, 'OtelInstrumentation')
+
+
+def test_plugin_api_does_not_export_tracer_or_exporters() -> None:
+    """from genkit.plugin_api import tracer fails; Imagen imports tracer from genkit_otel."""
+    assert 'tracer' not in plugin_api.__all__
+    assert 'add_custom_exporter' not in plugin_api.__all__
+    assert not hasattr(plugin_api, 'tracer')
+    assert not hasattr(plugin_api, 'add_custom_exporter')
+
+
+def test_configure_instrumentation_accepts_otel_from_genkit_otel() -> None:
+    """from genkit_otel import OtelInstrumentation; configure_instrumentation records spans."""
+    configure_instrumentation(OtelInstrumentation())
+    assert is_instrumented_by(OtelInstrumentation)
+    assert tracer is not None
 
 
 @pytest.mark.asyncio
@@ -206,7 +227,7 @@ async def test_dev_without_a_collector_stays_untraced(
 async def test_add_custom_exporter_after_genkit_does_not_turn_tracing_on(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """add_custom_exporter after Genkit() is mailbox-only; ids stay empty."""
+    """add_custom_exporter after Genkit() does not turn tracing on; ids stay empty."""
     monkeypatch.setenv(GENKIT_ENV, 'dev')
 
     Genkit()
@@ -248,7 +269,7 @@ async def test_enable_does_not_add_a_second_otel_provider() -> None:
 
 
 @pytest.mark.asyncio
-async def test_enable_hangs_cloud_exporter_on_their_provider() -> None:
+async def test_enable_sends_cloud_trace_to_their_tracer_provider() -> None:
     """OtelInstrumentation(tracer_provider=theirs) then enable: Cloud Trace sees their spans."""
     theirs = TracerProvider()
     cloud = InMemorySpanExporter()
@@ -313,7 +334,7 @@ def test_init_provider_does_not_rewrite_log_format(monkeypatch: pytest.MonkeyPat
             seen['set_logging_format'] = set_logging_format
 
     monkeypatch.setattr(
-        'genkit._core._telemetry.otel.LoggingInstrumentor',
+        'genkit_otel._provider.LoggingInstrumentor',
         FakeInstrumentor,
     )
     init_provider()
@@ -322,7 +343,7 @@ def test_init_provider_does_not_rewrite_log_format(monkeypatch: pytest.MonkeyPat
 
 
 @pytest.mark.asyncio
-async def test_enable_under_genkit_start_leaves_developer_ui_inject_to_genkit(
+async def test_enable_under_genkit_start_leaves_developer_ui_to_genkit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Under genkit start, enable does not steal the Developer UI collector."""
@@ -343,10 +364,10 @@ async def test_enable_under_genkit_start_leaves_developer_ui_inject_to_genkit(
 
 
 @pytest.mark.asyncio
-async def test_leftover_collector_url_in_prod_does_not_block_enable(
+async def test_stale_collector_env_in_prod_still_turns_cloud_spans_on(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """GENKIT_TELEMETRY_SERVER leftover in prod: enable still turns spans on."""
+    """A GENKIT_TELEMETRY_SERVER already in the prod shell does not block Cloud spans."""
     monkeypatch.setenv('GENKIT_TELEMETRY_SERVER', 'http://127.0.0.1:4033')
 
     exporter = InMemorySpanExporter()
@@ -371,7 +392,7 @@ def _capture_handshake_exporters(monkeypatch: pytest.MonkeyPatch) -> list[object
         seen.append(exporter)
         real(exporter, name)
 
-    monkeypatch.setattr('genkit._core._telemetry.otel.add_custom_exporter', capture)
+    monkeypatch.setattr('genkit_otel._provider.add_custom_exporter', capture)
     return seen
 
 
@@ -440,18 +461,16 @@ async def test_handshake_url_in_dev_turns_tracing_on(
 
 
 @pytest.mark.asyncio
-async def test_leftover_collector_url_does_not_drop_handshake_url(
+async def test_stale_collector_env_does_not_override_handshake_url(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Leftover GENKIT_TELEMETRY_SERVER in the shell still takes today's handshake URL."""
-    leftover = _start_collector()
-    live = _start_collector()
-    leftover_server, leftover_posts = leftover
-    live_server, live_posts = live
-    leftover_url = f'http://127.0.0.1:{leftover_server.server_address[1]}'
+    """Today's genkit start handshake URL wins over a GENKIT_TELEMETRY_SERVER already in the shell."""
+    stale_server, stale_posts = _start_collector()
+    live_server, live_posts = _start_collector()
+    stale_url = f'http://127.0.0.1:{stale_server.server_address[1]}'
     live_url = f'http://127.0.0.1:{live_server.server_address[1]}'
     try:
-        monkeypatch.setenv('GENKIT_TELEMETRY_SERVER', leftover_url)
+        monkeypatch.setenv('GENKIT_TELEMETRY_SERVER', stale_url)
 
         Genkit()
         _handshake_server().apply_handshake_telemetry(live_url)
@@ -462,14 +481,14 @@ async def test_leftover_collector_url_does_not_drop_handshake_url(
         assert is_instrumented_by(GenkitBuiltinInstrumentation)
         assert _hex_id(result.trace_id, 32)
         assert live_posts
-        assert not leftover_posts
+        assert not stale_posts
     finally:
-        leftover_server.shutdown()
+        stale_server.shutdown()
         live_server.shutdown()
 
 
 @pytest.mark.asyncio
-async def test_handshake_skips_when_otel_already_mints(
+async def test_handshake_is_noop_when_genkit_start_already_wired_the_collector(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """genkit start -- python: Genkit() already wired the collector; handshake is a no-op."""
@@ -487,10 +506,6 @@ async def test_handshake_skips_when_otel_already_mints(
 @pytest.mark.asyncio
 async def test_notify_url_in_dev_turns_tracing_on(monkeypatch: pytest.MonkeyPatch) -> None:
     """Default genkit start POSTs /api/notify; that turns tracing on like v2 handshake."""
-    from httpx import ASGITransport, AsyncClient
-
-    from genkit._core._reflection import create_reflection_asgi_app
-
     monkeypatch.setenv(GENKIT_ENV, 'dev')
     app = create_reflection_asgi_app(Registry())
     transport = ASGITransport(app=app)
@@ -506,10 +521,10 @@ async def test_notify_url_in_dev_turns_tracing_on(monkeypatch: pytest.MonkeyPatc
 
 
 @pytest.mark.asyncio
-async def test_already_minting_hangs_handshake_mailbox(
+async def test_cloud_already_on_still_posts_handshake_traces_to_developer_ui(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """force_dev_export mints first; handshake hangs today's mailbox so the tab can fill."""
+    """Cloud spans are already on; the handshake URL still fills the Developer UI Traces tab."""
     monkeypatch.setenv(GENKIT_ENV, 'dev')
     server, posts = _start_collector()
     url = f'http://127.0.0.1:{server.server_address[1]}'
@@ -531,20 +546,16 @@ async def test_already_minting_hangs_handshake_mailbox(
 
 
 @pytest.mark.asyncio
-async def test_plugin_tracer_is_noop_when_uninstrumented() -> None:
-    """Imagen/Veo plugin_api.tracer does not mint when tracing is off."""
-    from genkit.plugin_api import tracer
-
+async def test_imagen_tracer_does_not_record_when_tracing_is_off() -> None:
+    """Imagen's genkit_otel.tracer opens a no-op span when nothing is configured."""
     with tracer.start_as_current_span('generate_images') as span:
         ctx = span.get_span_context()
         assert ctx.trace_id == 0
 
 
 @pytest.mark.asyncio
-async def test_plugin_tracer_hangs_on_their_provider() -> None:
-    """OtelInstrumentation(tracer_provider=theirs): plugin_api.tracer mints on theirs."""
-    from genkit.plugin_api import tracer
-
+async def test_imagen_tracer_records_on_their_tracer_provider() -> None:
+    """OtelInstrumentation(tracer_provider=theirs): Imagen's tracer writes to theirs."""
     theirs = TracerProvider()
     cloud = InMemorySpanExporter()
     theirs.add_span_processor(SimpleSpanProcessor(cloud))
@@ -564,9 +575,9 @@ def test_importing_genkit_does_not_start_a_tracer() -> None:
     script = """
 from opentelemetry import trace
 from genkit import Genkit  # noqa: F401
-from genkit._core._telemetry.otel import is_placeholder_provider
+from genkit_otel._provider import is_placeholder_provider
 from genkit._core._telemetry.instrumentation import is_instrumented_by
-from genkit.telemetry import OtelInstrumentation
+from genkit_otel import OtelInstrumentation
 
 assert not is_instrumented_by(OtelInstrumentation)
 assert is_placeholder_provider(trace.get_tracer_provider())
@@ -944,10 +955,6 @@ async def test_action_without_context_has_no_context_attribute() -> None:
 @pytest.mark.asyncio
 async def test_uninstrumented_run_action_omits_telemetry_payload() -> None:
     """v1 runAction omits telemetry when ids are empty so a blank id is not a broken exporter."""
-    from httpx import ASGITransport, AsyncClient
-
-    from genkit._core._reflection import create_reflection_asgi_app
-
     registry = Registry()
     action = Action(name='joke', kind=ActionKind.FLOW, fn=_joke)
     registry.register_action_from_instance(action)
@@ -1001,8 +1008,6 @@ async def test_reset_stops_developer_ui_log_capture(
         Genkit()
         assert any(isinstance(i, DirectHttpInstrumentation) for i in instrumentations)
         reset_instrumentation()
-        import logging
-
         logging.getLogger('genkit-test').error('after reset')
         await asyncio.sleep(0.05)
         assert not any('"after reset"' in body for body in posts)

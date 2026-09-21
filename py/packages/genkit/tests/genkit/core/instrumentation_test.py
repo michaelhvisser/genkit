@@ -3,7 +3,7 @@
 # Copyright 2026 Google LLC
 # SPDX-License-Identifier: Apache-2.0
 
-"""Dispatcher tests for pluggable Instrumentation providers."""
+"""What configure_instrumentation and run_in_new_span do when you stack backends."""
 
 from __future__ import annotations
 
@@ -11,6 +11,8 @@ from collections.abc import Awaitable, Callable, Mapping
 
 import pytest
 
+from genkit import ActionKind
+from genkit._core._action import Action
 from genkit._core._telemetry.instrumentation import (
     SpanContext,
     SpanMetadata,
@@ -20,7 +22,8 @@ from genkit._core._telemetry.instrumentation import (
     set_custom_metadata_attributes,
     set_span_state,
 )
-from genkit.telemetry import OtelInstrumentation, configure_instrumentation
+from genkit.telemetry import configure_instrumentation
+from genkit_otel import OtelInstrumentation
 
 
 class RecordedSpan:
@@ -80,6 +83,7 @@ def _reset() -> object:
 
 @pytest.mark.asyncio
 async def test_noop_span_when_nothing_configured() -> None:
+    """No backend configured: the action still runs and ids stay empty."""
     seen: SpanContext | None = None
 
     async def body(span: SpanContext) -> str:
@@ -98,6 +102,7 @@ async def test_noop_span_when_nothing_configured() -> None:
 
 @pytest.mark.asyncio
 async def test_composes_providers_in_registration_order() -> None:
+    """Two configure_instrumentation calls wrap the action in registration order."""
     log: list[str] = []
     configure_instrumentation(FakeInstrumentation('a', log))
     configure_instrumentation(FakeInstrumentation('b', log))
@@ -111,7 +116,8 @@ async def test_composes_providers_in_registration_order() -> None:
 
 
 @pytest.mark.asyncio
-async def test_in_flight_span_keeps_the_provider_list_it_started_with() -> None:
+async def test_in_flight_span_keeps_the_backends_it_started_with() -> None:
+    """configure_instrumentation during an in-flight span does not join that span."""
     log: list[str] = []
     configure_instrumentation(FakeInstrumentation('a', log))
     configure_instrumentation(FakeInstrumentation('b', log))
@@ -127,7 +133,8 @@ async def test_in_flight_span_keeps_the_provider_list_it_started_with() -> None:
 
 
 @pytest.mark.asyncio
-async def test_set_custom_metadata_fans_out() -> None:
+async def test_set_custom_metadata_writes_to_every_backend() -> None:
+    """set_custom_metadata_attributes copies onto every configured backend."""
     log: list[str] = []
     a = FakeInstrumentation('a', log)
     b = FakeInstrumentation('b', log)
@@ -143,7 +150,8 @@ async def test_set_custom_metadata_fans_out() -> None:
 
 
 @pytest.mark.asyncio
-async def test_set_output_fans_out() -> None:
+async def test_set_output_writes_to_every_backend() -> None:
+    """span.set_output copies onto every configured backend."""
     log: list[str] = []
     a = FakeInstrumentation('a', log)
     b = FakeInstrumentation('b', log)
@@ -159,7 +167,8 @@ async def test_set_output_fans_out() -> None:
 
 
 @pytest.mark.asyncio
-async def test_set_state_fans_out() -> None:
+async def test_set_state_writes_to_every_backend() -> None:
+    """span.set_state copies onto every configured backend."""
     log: list[str] = []
     a = FakeInstrumentation('a', log)
     b = FakeInstrumentation('b', log)
@@ -175,7 +184,8 @@ async def test_set_state_fans_out() -> None:
 
 
 @pytest.mark.asyncio
-async def test_set_span_state_fans_out() -> None:
+async def test_set_span_state_writes_to_every_backend() -> None:
+    """set_span_state copies onto every configured backend."""
     log: list[str] = []
     a = FakeInstrumentation('a', log)
     b = FakeInstrumentation('b', log)
@@ -190,31 +200,37 @@ async def test_set_span_state_fans_out() -> None:
     assert b.spans[0].states == ['error']
 
 
-def test_configure_rejects_junk_at_the_boundary() -> None:
+def test_configure_rejects_a_non_instrumentation() -> None:
+    """configure_instrumentation(object()) raises; it does not silently no-op."""
     with pytest.raises(TypeError, match='Instrumentation instance'):
         configure_instrumentation(object())  # type: ignore[arg-type]
 
 
-def test_otel_instrumentation_rejects_junk_tracer_provider() -> None:
+def test_otel_instrumentation_rejects_a_non_tracer_provider() -> None:
+    """OtelInstrumentation(tracer_provider=object()) raises."""
     with pytest.raises(TypeError, match='TracerProvider'):
         OtelInstrumentation(tracer_provider=object())  # type: ignore[arg-type]
 
 
-def test_configure_rejects_the_provider_class() -> None:
+def test_configure_rejects_the_class_instead_of_an_instance() -> None:
+    """Passing OtelInstrumentation the class, not an instance, raises."""
     with pytest.raises(
         TypeError,
-        match='type genkit._core._telemetry.otel.OtelInstrumentation',
+        match='type genkit_otel._provider.OtelInstrumentation',
     ):
         configure_instrumentation(OtelInstrumentation)  # type: ignore[arg-type]
 
 
-def test_is_instrumented_by_rejects_junk_at_the_boundary() -> None:
+def test_is_instrumented_by_rejects_a_string_name() -> None:
+    """is_instrumented_by wants the class, not the name as a string."""
     with pytest.raises(TypeError, match='builtins.str'):
         is_instrumented_by('OtelInstrumentation')  # type: ignore[arg-type]
 
 
 @pytest.mark.asyncio
 async def test_run_in_new_span_rejects_a_sync_body() -> None:
+    """run_in_new_span only accepts an async body."""
+
     def sync_body(_span: SpanContext) -> str:
         return 'ok'
 
@@ -223,7 +239,8 @@ async def test_run_in_new_span_rejects_a_sync_body() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ids_resolve_to_first_non_empty() -> None:
+async def test_trace_id_comes_from_the_first_backend_that_has_one() -> None:
+    """The action's trace_id is the first non-empty id in the backend chain."""
     log: list[str] = []
     configure_instrumentation(FakeInstrumentation('a', log))
     configure_instrumentation(FakeInstrumentation('b', log, trace_id='trace-b', span_id='span-b'))
@@ -242,7 +259,8 @@ async def test_ids_resolve_to_first_non_empty() -> None:
 
 
 @pytest.mark.asyncio
-async def test_errors_still_exit_each_provider() -> None:
+async def test_a_raised_error_still_closes_every_backend() -> None:
+    """A raised error still closes every backend in reverse order."""
     log: list[str] = []
     configure_instrumentation(FakeInstrumentation('a', log))
     configure_instrumentation(FakeInstrumentation('b', log))
@@ -258,8 +276,7 @@ async def test_errors_still_exit_each_provider() -> None:
 
 @pytest.mark.asyncio
 async def test_action_without_instrumentation_has_empty_ids() -> None:
-    from genkit import ActionKind
-    from genkit._core._action import Action
+    """Action.run() with no backend still returns the answer and empty ids."""
 
     async def noop() -> str:
         return 'ok'

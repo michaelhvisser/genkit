@@ -48,6 +48,7 @@ from genkit import Genkit
 from genkit._core._action import Action, ActionKind, ActionRunContext, BidiAction
 from genkit._core._middleware import BaseMiddleware
 from genkit._core._model import AgentInit, AgentInput, ModelConfig
+from genkit._core._reflection import ActionRunner
 from genkit._core._reflection_v2 import (
     JSON_RPC_INVALID_PARAMS,
     JSON_RPC_METHOD_NOT_FOUND,
@@ -55,9 +56,11 @@ from genkit._core._reflection_v2 import (
 )
 from genkit._core._registry import Registry
 from genkit._core._telemetry.instrumentation import reset_instrumentation
-from genkit._core._telemetry.otel import init_provider
+from genkit._core._typing import ReflectionRunActionParams
 from genkit.model import model_ref
-from genkit.telemetry import OtelInstrumentation, configure_instrumentation
+from genkit.telemetry import configure_instrumentation
+from genkit_otel import OtelInstrumentation
+from genkit_otel._provider import init_provider
 
 
 @pytest.fixture(autouse=True)
@@ -886,9 +889,6 @@ async def test_reflection_server_v2_omits_data_for_simple_errors(
 
 def test_reflection_run_action_params_accepts_dev_ui_telemetry_labels() -> None:
     """Dev UI sends telemetryLabels as a string record (e.g. genkitx:ignore-trace)."""
-
-    from genkit._core._typing import ReflectionRunActionParams
-
     p = ReflectionRunActionParams.model_validate({
         'key': '/executable-prompt/story',
         'telemetryLabels': {'genkitx:ignore-trace': 'true'},
@@ -899,7 +899,6 @@ def test_reflection_run_action_params_accepts_dev_ui_telemetry_labels() -> None:
 @pytest.mark.asyncio
 async def test_empty_trace_id_is_not_registered_for_cancel() -> None:
     """Empty ids must not become a shared cancel key."""
-    from genkit._core._reflection import ActionRunner
 
     async def noop() -> None:
         return None
