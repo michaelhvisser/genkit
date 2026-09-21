@@ -14,26 +14,22 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Turn tracing on.
+"""Turn Genkit traces on.
 
-A plain ``Genkit()`` script does not record traces. Action results have
-empty ``trace_id`` and ``span_id``.
+Flows and ``generate()`` already open spans. This package is how those
+spans get recorded — Developer UI, Cloud Trace, or your own OpenTelemetry
+provider.
 
-``genkit start -- uv run app.py`` sets ``GENKIT_ENV=dev`` and a
-collector URL before spawn; ``Genkit()`` installs an HTTP poster that
-fills the Traces tab without booting OpenTelemetry. If you start the
-app yourself (``genkit start``, then ``GENKIT_ENV=dev uv run app.py``),
-the collector URL arrives on ``/api/notify`` or the reflection v2
-handshake and turns tracing on the same way.
+``genkit start -- uv run app.py`` records to the Developer UI Traces tab.
+A script you run with plain ``uv run`` does not record traces.
 
-``enable_google_cloud_telemetry()`` is enough for Cloud Trace in
-production. That path uses ``OtelInstrumentation``. Under
-``genkit start``, ``Genkit()`` still owns the Developer UI collector.
+To send spans to Cloud Trace or your own provider:
 
-Example:
     from genkit.telemetry import configure_instrumentation, OtelInstrumentation
 
     configure_instrumentation(OtelInstrumentation(tracer_provider=theirs))
+
+``enable_google_cloud_telemetry()`` sets that provider up for you.
 """
 
 from genkit._core._telemetry.instrumentation import configure_instrumentation
