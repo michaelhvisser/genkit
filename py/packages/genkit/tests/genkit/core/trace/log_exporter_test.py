@@ -25,6 +25,7 @@ from genkit._core._logger import configure_structlog_level, get_logger, is_debug
 from genkit._core._reflection_v2 import ReflectionServerV2
 from genkit._core._registry import Registry
 from genkit._core._telemetry import _log_exporter as log_exporter
+from genkit._core._telemetry._instrumentation import reset_instrumentation, run_in_new_span
 from genkit._core._telemetry._log_exporter import (
     BATCH_DELAY_S,
     GENKIT_OTEL_ENABLE_LOGS,
@@ -42,7 +43,6 @@ from genkit._core._telemetry._log_exporter import (
     put_poison_pill,
     reset_log_export,
 )
-from genkit._core._telemetry.instrumentation import reset_instrumentation, run_in_new_span
 from genkit.telemetry import configure_instrumentation
 from genkit_otel import OtelInstrumentation
 from genkit_otel._provider import init_provider

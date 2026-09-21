@@ -61,7 +61,7 @@ from genkit._core._model import (
     SessionState,
 )
 from genkit._core._registry import Registry
-from genkit._core._telemetry.instrumentation import SpanContext, run_in_new_span
+from genkit._core._telemetry._instrumentation import SpanContext, run_in_new_span
 from genkit._core._typing import (
     AgentFinishReason,
     FinishReason,

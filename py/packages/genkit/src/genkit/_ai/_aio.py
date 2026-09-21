@@ -109,8 +109,8 @@ from genkit._core._protocols import SessionLike
 from genkit._core._reflection import ReflectionServer, ServerSpec, create_reflection_asgi_app
 from genkit._core._reflection_v2 import ReflectionServerV2
 from genkit._core._registry import Registry
+from genkit._core._telemetry._instrumentation import run_in_new_span
 from genkit._core._telemetry.http import maybe_inject_dev_instrumentation
-from genkit._core._telemetry.instrumentation import run_in_new_span
 from genkit._core._typing import (
     BaseDataPoint,
     Embedding,

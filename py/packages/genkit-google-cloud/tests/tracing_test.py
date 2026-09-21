@@ -26,7 +26,7 @@ import pytest
 from genkit_google_cloud.telemetry.config import resolve_project_id
 from genkit_google_cloud.telemetry.tracing import add_gcp_telemetry, enable_google_cloud_telemetry
 
-from genkit._core._telemetry.instrumentation import is_instrumented_by, reset_instrumentation
+from genkit._core._telemetry._instrumentation import is_instrumented_by, reset_instrumentation
 from genkit_otel import OtelInstrumentation
 
 # Environment variable and value constants (matching genkit._core._environment)

@@ -13,7 +13,7 @@ import pytest
 
 from genkit import ActionKind
 from genkit._core._action import Action
-from genkit._core._telemetry.instrumentation import (
+from genkit._core._telemetry._instrumentation import (
     SpanContext,
     SpanMetadata,
     is_instrumented_by,

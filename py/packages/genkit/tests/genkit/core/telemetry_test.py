@@ -33,12 +33,7 @@ from genkit._core._environment import GENKIT_ENV
 from genkit._core._reflection import create_reflection_asgi_app
 from genkit._core._reflection_v2 import ReflectionServerV2
 from genkit._core._registry import Registry
-from genkit._core._telemetry.http import (
-    DirectHttpInstrumentation,
-    GenkitBuiltinInstrumentation,
-    flush_direct_http_instrumentations,
-)
-from genkit._core._telemetry.instrumentation import (
+from genkit._core._telemetry._instrumentation import (
     Instrumentation,
     NoopSpanContext,
     SpanContext,
@@ -50,6 +45,11 @@ from genkit._core._telemetry.instrumentation import (
     run_in_new_span,
     set_custom_metadata_attributes,
     set_span_state,
+)
+from genkit._core._telemetry.http import (
+    DirectHttpInstrumentation,
+    GenkitBuiltinInstrumentation,
+    flush_direct_http_instrumentations,
 )
 from genkit.telemetry import configure_instrumentation
 from genkit_otel import OtelInstrumentation, add_custom_exporter, maybe_configure_otel_for_exporters, tracer
@@ -576,7 +576,7 @@ def test_importing_genkit_does_not_start_a_tracer() -> None:
 from opentelemetry import trace
 from genkit import Genkit  # noqa: F401
 from genkit_otel._provider import is_placeholder_provider
-from genkit._core._telemetry.instrumentation import is_instrumented_by
+from genkit._core._telemetry._instrumentation import is_instrumented_by
 from genkit_otel import OtelInstrumentation
 
 assert not is_instrumented_by(OtelInstrumentation)

@@ -34,7 +34,7 @@ from genkit._core._action import ActionRunContext
 from genkit._core._error import GenkitError, PublicError, RuntimeErrorReason
 from genkit._core._model import GenerateActionOptions, ModelRequest, Resume
 from genkit._core._registry import Registry
-from genkit._core._telemetry.instrumentation import reset_instrumentation
+from genkit._core._telemetry._instrumentation import reset_instrumentation
 from genkit._core._typing import (
     FinishReason,
     GenerateActionOutputConfig,

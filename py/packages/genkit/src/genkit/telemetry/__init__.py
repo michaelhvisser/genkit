@@ -27,7 +27,7 @@ Example:
     configure_instrumentation(OtelInstrumentation(tracer_provider=theirs))
 """
 
-from genkit._core._telemetry.instrumentation import (
+from genkit._core._telemetry._instrumentation import (
     Instrumentation,
     SpanContext,
     SpanMetadata,

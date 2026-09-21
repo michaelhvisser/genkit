@@ -28,7 +28,7 @@ from genkit._core._action import Action, ActionKind
 from genkit._core._logger import get_logger
 from genkit._core._registry import Registry
 from genkit._core._schema import to_json_schema
-from genkit._core._telemetry.instrumentation import SpanContext, run_in_new_span
+from genkit._core._telemetry._instrumentation import SpanContext, run_in_new_span
 from genkit._core._typing import (
     ActionMetadata,
     BaseDataPoint,

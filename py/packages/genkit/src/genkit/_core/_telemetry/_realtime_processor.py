@@ -21,7 +21,7 @@ from opentelemetry.sdk.trace import ReadableSpan, Span
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 
 from genkit._core._compat import override
-from genkit._core._telemetry.instrumentation import suppress_telemetry
+from genkit._core._telemetry._instrumentation import suppress_telemetry
 
 
 class RealtimeSpanProcessor(SimpleSpanProcessor):

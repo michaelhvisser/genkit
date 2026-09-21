@@ -35,7 +35,7 @@ from genkit._core._compat import StrEnum
 from genkit._core._error import GenkitError, RuntimeErrorReason
 from genkit._core._model import config_type_path, declared_config_type
 from genkit._core._schema import to_json_schema
-from genkit._core._telemetry.instrumentation import SpanContext, run_in_new_span, suppress_telemetry
+from genkit._core._telemetry._instrumentation import SpanContext, run_in_new_span, suppress_telemetry
 
 # =============================================================================
 # Span attribute types and tracing helpers

@@ -38,8 +38,7 @@ from genkit._core._error import GenkitError, GenkitInterrupt
 from genkit._core._logger import get_logger
 from genkit._core._telemetry._attrs import Attr, State, metadata_key
 from genkit._core._telemetry._default_exporter import create_span_processor
-from genkit._core._telemetry._path import build_path
-from genkit._core._telemetry.instrumentation import (
+from genkit._core._telemetry._instrumentation import (
     SpanMetadata,
     SpanNext,
     configure_instrumentation,
@@ -49,6 +48,7 @@ from genkit._core._telemetry.instrumentation import (
     start_attributes,
     to_json_attr,
 )
+from genkit._core._telemetry._path import build_path
 
 logger = get_logger(__name__)
 

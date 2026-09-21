@@ -36,8 +36,7 @@ from .._environment import is_dev_environment
 from .._error import GenkitError, GenkitInterrupt
 from .._logger import get_logger
 from ._attrs import Attr, State, metadata_key
-from ._path import build_path
-from .instrumentation import (
+from ._instrumentation import (
     Instrumentation,
     SpanMetadata,
     SpanNext,
@@ -48,6 +47,7 @@ from .instrumentation import (
     start_attributes,
     to_json_attr,
 )
+from ._path import build_path
 
 logger = get_logger(__name__)
 

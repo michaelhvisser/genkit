@@ -22,8 +22,7 @@ from genkit._ai._tools import Interrupt, ToolRunContext
 from genkit._core._action import Action, ActionRunContext
 from genkit._core._error import GenkitError
 from genkit._core._telemetry._attrs import metadata_key
-from genkit._core._telemetry._realtime_processor import RealtimeSpanProcessor
-from genkit._core._telemetry.instrumentation import (
+from genkit._core._telemetry._instrumentation import (
     SpanMetadata,
     is_instrumented_by,
     parent_path_context,
@@ -31,6 +30,7 @@ from genkit._core._telemetry.instrumentation import (
     run_in_new_span,
     start_attributes,
 )
+from genkit._core._telemetry._realtime_processor import RealtimeSpanProcessor
 from genkit.telemetry import configure_instrumentation
 from genkit_otel import OtelInstrumentation, add_custom_exporter
 
