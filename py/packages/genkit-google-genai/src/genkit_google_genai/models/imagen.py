@@ -43,14 +43,13 @@ from genkit import (
     Role,
     Supports,
 )
-from genkit.plugin_api import ActionRunContext, wrap_http_error
+from genkit.plugin_api import ActionRunContext, tracer, wrap_http_error
 from genkit_google_genai.models._sdk_config import (
     attach_leftovers,
     dump_family_config,
     sdk_config_error,
     split_sdk_fields,
 )
-from genkit_otel import tracer
 
 
 def _to_dict(obj: Any) -> Any:  # noqa: ANN401

@@ -26,16 +26,8 @@ Example:
     configure_instrumentation(OtelInstrumentation(tracer_provider=theirs))
 """
 
-from genkit_otel._provider import (
-    OtelInstrumentation,
-    add_custom_exporter,
-    maybe_configure_otel_for_exporters,
-    tracer,
-)
+from genkit_otel._provider import OtelInstrumentation
 
 __all__ = [
     'OtelInstrumentation',
-    'add_custom_exporter',
-    'maybe_configure_otel_for_exporters',
-    'tracer',
 ]

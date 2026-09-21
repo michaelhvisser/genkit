@@ -31,8 +31,9 @@ from genkit._core._telemetry._instrumentation import (
     start_attributes,
 )
 from genkit._core._telemetry._realtime_processor import RealtimeSpanProcessor
+from genkit.plugin_api import add_custom_exporter
 from genkit.telemetry import configure_instrumentation
-from genkit_otel import OtelInstrumentation, add_custom_exporter
+from genkit_otel import OtelInstrumentation
 
 
 @pytest.fixture(autouse=True)

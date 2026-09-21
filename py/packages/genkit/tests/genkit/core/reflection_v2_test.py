@@ -55,12 +55,12 @@ from genkit._core._reflection_v2 import (
     ReflectionServerV2,
 )
 from genkit._core._registry import Registry
+from genkit._core._telemetry._exporters import init_provider
 from genkit._core._telemetry._instrumentation import reset_instrumentation
 from genkit._core._typing import ReflectionRunActionParams
 from genkit.model import model_ref
 from genkit.telemetry import configure_instrumentation
 from genkit_otel import OtelInstrumentation
-from genkit_otel._provider import init_provider
 
 
 @pytest.fixture(autouse=True)

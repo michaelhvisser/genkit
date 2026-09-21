@@ -27,12 +27,14 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import NoOpTracerProvider
 
+import genkit_otel
 from genkit import ActionKind, Genkit, plugin_api, telemetry
 from genkit._core._action import Action
 from genkit._core._environment import GENKIT_ENV
 from genkit._core._reflection import create_reflection_asgi_app
 from genkit._core._reflection_v2 import ReflectionServerV2
 from genkit._core._registry import Registry
+from genkit._core._telemetry._exporters import init_provider
 from genkit._core._telemetry._instrumentation import (
     Instrumentation,
     NoopSpanContext,
@@ -51,9 +53,9 @@ from genkit._core._telemetry.http import (
     GenkitBuiltinInstrumentation,
     flush_direct_http_instrumentations,
 )
+from genkit.plugin_api import add_custom_exporter, tracer
 from genkit.telemetry import configure_instrumentation
-from genkit_otel import OtelInstrumentation, add_custom_exporter, maybe_configure_otel_for_exporters, tracer
-from genkit_otel._provider import init_provider
+from genkit_otel import OtelInstrumentation
 
 T = TypeVar('T')
 
@@ -114,12 +116,16 @@ def test_otel_instrumentation_imports_from_genkit_otel_not_genkit_telemetry() ->
     assert not hasattr(telemetry, 'OtelInstrumentation')
 
 
-def test_plugin_api_does_not_export_tracer_or_exporters() -> None:
-    """from genkit.plugin_api import tracer fails; Imagen imports tracer from genkit_otel."""
-    assert 'tracer' not in plugin_api.__all__
-    assert 'add_custom_exporter' not in plugin_api.__all__
-    assert not hasattr(plugin_api, 'tracer')
-    assert not hasattr(plugin_api, 'add_custom_exporter')
+def test_plugin_api_exports_tracer_and_add_custom_exporter() -> None:
+    """from genkit.plugin_api import tracer; those names are not on genkit_otel."""
+    assert 'tracer' in plugin_api.__all__
+    assert 'add_custom_exporter' in plugin_api.__all__
+    assert 'tracer' not in genkit_otel.__all__
+    assert 'add_custom_exporter' not in genkit_otel.__all__
+    assert 'maybe_configure_otel_for_exporters' not in genkit_otel.__all__
+    assert not hasattr(genkit_otel, 'tracer')
+    assert not hasattr(genkit_otel, 'add_custom_exporter')
+    assert not hasattr(genkit_otel, 'maybe_configure_otel_for_exporters')
 
 
 def test_configure_instrumentation_accepts_otel_from_genkit_otel() -> None:
@@ -246,7 +252,7 @@ async def test_enable_google_cloud_telemetry_is_enough() -> None:
     """enable_google_cloud_telemetry() is enough; you get real hex ids."""
     exporter = InMemorySpanExporter()
     add_custom_exporter(exporter, 'cloud-trace')
-    maybe_configure_otel_for_exporters()
+    configure_instrumentation(OtelInstrumentation())
     action = Action(name='joke', kind=ActionKind.FLOW, fn=_joke)
     result = await action.run()
     _force_flush()
@@ -258,24 +264,12 @@ async def test_enable_google_cloud_telemetry_is_enough() -> None:
 
 
 @pytest.mark.asyncio
-async def test_enable_does_not_add_a_second_otel_provider() -> None:
-    """They already configured OtelInstrumentation; enable only hangs exporters."""
-    yours = OtelInstrumentation()
-    configure_instrumentation(yours)
-    add_custom_exporter(InMemorySpanExporter(), 'cloud-trace')
-    maybe_configure_otel_for_exporters()
-
-    assert instrumentations == [yours]
-
-
-@pytest.mark.asyncio
 async def test_enable_sends_cloud_trace_to_their_tracer_provider() -> None:
-    """OtelInstrumentation(tracer_provider=theirs) then enable: Cloud Trace sees their spans."""
+    """OtelInstrumentation(tracer_provider=theirs) then an exporter: Cloud Trace sees their spans."""
     theirs = TracerProvider()
     cloud = InMemorySpanExporter()
     configure_instrumentation(OtelInstrumentation(tracer_provider=theirs))
     add_custom_exporter(cloud, 'cloud-trace')
-    maybe_configure_otel_for_exporters()
 
     action = Action(name='joke', kind=ActionKind.FLOW, fn=_joke)
     result = await action.run()
@@ -334,7 +328,7 @@ def test_init_provider_does_not_rewrite_log_format(monkeypatch: pytest.MonkeyPat
             seen['set_logging_format'] = set_logging_format
 
     monkeypatch.setattr(
-        'genkit_otel._provider.LoggingInstrumentor',
+        'genkit._core._telemetry._exporters.LoggingInstrumentor',
         FakeInstrumentor,
     )
     init_provider()
@@ -351,7 +345,6 @@ async def test_enable_under_genkit_start_leaves_developer_ui_to_genkit(
     monkeypatch.setenv('GENKIT_TELEMETRY_SERVER', 'http://127.0.0.1:4033')
 
     add_custom_exporter(InMemorySpanExporter(), 'cloud-trace')
-    maybe_configure_otel_for_exporters()
     assert not is_instrumented_by(OtelInstrumentation)
 
     Genkit()
@@ -360,23 +353,6 @@ async def test_enable_under_genkit_start_leaves_developer_ui_to_genkit(
 
     assert is_instrumented_by(GenkitBuiltinInstrumentation)
     assert not is_instrumented_by(OtelInstrumentation)
-    assert _hex_id(result.trace_id, 32)
-
-
-@pytest.mark.asyncio
-async def test_stale_collector_env_in_prod_still_turns_cloud_spans_on(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A GENKIT_TELEMETRY_SERVER already in the prod shell does not block Cloud spans."""
-    monkeypatch.setenv('GENKIT_TELEMETRY_SERVER', 'http://127.0.0.1:4033')
-
-    exporter = InMemorySpanExporter()
-    add_custom_exporter(exporter, 'cloud-trace')
-    maybe_configure_otel_for_exporters()
-    action = Action(name='joke', kind=ActionKind.FLOW, fn=_joke)
-    result = await action.run()
-
-    assert is_instrumented_by(OtelInstrumentation)
     assert _hex_id(result.trace_id, 32)
 
 
@@ -392,7 +368,7 @@ def _capture_handshake_exporters(monkeypatch: pytest.MonkeyPatch) -> list[object
         seen.append(exporter)
         real(exporter, name)
 
-    monkeypatch.setattr('genkit_otel._provider.add_custom_exporter', capture)
+    monkeypatch.setattr('genkit._core._telemetry._exporters.add_custom_exporter', capture)
     return seen
 
 
@@ -530,7 +506,7 @@ async def test_cloud_already_on_still_posts_handshake_traces_to_developer_ui(
     url = f'http://127.0.0.1:{server.server_address[1]}'
     try:
         add_custom_exporter(InMemorySpanExporter(), 'cloud-trace')
-        maybe_configure_otel_for_exporters()
+        configure_instrumentation(OtelInstrumentation())
         assert is_instrumented_by(OtelInstrumentation)
 
         _handshake_server().apply_handshake_telemetry(url)
@@ -547,7 +523,7 @@ async def test_cloud_already_on_still_posts_handshake_traces_to_developer_ui(
 
 @pytest.mark.asyncio
 async def test_imagen_tracer_does_not_record_when_tracing_is_off() -> None:
-    """Imagen's genkit_otel.tracer opens a no-op span when nothing is configured."""
+    """Imagen's plugin_api.tracer opens a no-op span when nothing is configured."""
     with tracer.start_as_current_span('generate_images') as span:
         ctx = span.get_span_context()
         assert ctx.trace_id == 0
@@ -575,7 +551,7 @@ def test_importing_genkit_does_not_start_a_tracer() -> None:
     script = """
 from opentelemetry import trace
 from genkit import Genkit  # noqa: F401
-from genkit_otel._provider import is_placeholder_provider
+from genkit._core._telemetry._exporters import is_placeholder_provider
 from genkit._core._telemetry._instrumentation import is_instrumented_by
 from genkit_otel import OtelInstrumentation
 

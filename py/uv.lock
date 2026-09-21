@@ -1872,7 +1872,6 @@ version = "0.11.0"
 source = { editable = "packages/genkit-google-genai" }
 dependencies = [
     { name = "genkit" },
-    { name = "genkit-otel" },
     { name = "google-cloud-aiplatform" },
     { name = "google-genai" },
     { name = "strenum", marker = "python_full_version < '3.11'" },
@@ -1882,7 +1881,6 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "genkit", editable = "packages/genkit" },
-    { name = "genkit-otel", editable = "packages/genkit-otel" },
     { name = "google-cloud-aiplatform", specifier = ">=1.77.0" },
     { name = "google-genai", specifier = ">=2.14.0,<3" },
     { name = "strenum", marker = "python_full_version < '3.11'", specifier = ">=0.4.15" },

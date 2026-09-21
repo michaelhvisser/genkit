@@ -36,8 +36,10 @@ from opentelemetry.sdk.resources import SERVICE_INSTANCE_ID, SERVICE_NAME, Resou
 from opentelemetry.sdk.trace.sampling import Sampler
 from opentelemetry.trace import get_current_span, span as trace_span
 
-from genkit.plugin_api import is_dev_environment
-from genkit_otel import add_custom_exporter, maybe_configure_otel_for_exporters
+from genkit._core._telemetry._instrumentation import is_instrumented_by
+from genkit.plugin_api import add_custom_exporter, is_dev_environment
+from genkit.telemetry import configure_instrumentation
+from genkit_otel import OtelInstrumentation
 
 from .constants import (
     DEFAULT_METRIC_EXPORT_INTERVAL_MS,
@@ -248,7 +250,11 @@ class GcpTelemetry:
             )
 
             add_custom_exporter(trace_exporter, 'gcp_telemetry_server')
-            maybe_configure_otel_for_exporters()
+            if is_instrumented_by(OtelInstrumentation):
+                return
+            if is_dev_environment() and os.environ.get('GENKIT_TELEMETRY_SERVER'):
+                return
+            configure_instrumentation(OtelInstrumentation())
         except Exception as e:
             handle_tracing_error(e)
 

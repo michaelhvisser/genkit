@@ -37,6 +37,7 @@ from genkit._core._model import ModelConfig
 from genkit._core._plugin import MiddlewarePlugin, Plugin
 from genkit._core._schema import to_json_schema
 from genkit._core._telemetry._adjusting_exporter import AdjustingTraceExporter, RedactedSpan
+from genkit._core._telemetry._exporters import add_custom_exporter, tracer
 from genkit._core._telemetry._path import to_display_path
 from genkit._core._typing import ActionMetadata
 
@@ -88,7 +89,9 @@ __all__ = [
     # Tracing
     'AdjustingTraceExporter',
     'RedactedSpan',
+    'add_custom_exporter',
     'to_display_path',
+    'tracer',
     # Schema utilities
     'to_json_schema',
     # HTTP client

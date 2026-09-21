@@ -19,31 +19,20 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import traceback
-from collections.abc import Mapping, Sequence
-from contextlib import AbstractContextManager
-from typing import Any, TypeVar
+from collections.abc import Mapping
+from typing import TypeVar
 
 from opentelemetry import trace as trace_api
-from opentelemetry.context import Context
-from opentelemetry.instrumentation.logging import LoggingInstrumentor
 from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import SpanExporter
-from opentelemetry.trace import Link, NoOpTracer, NoOpTracerProvider, ProxyTracerProvider, Span, SpanKind, StatusCode
-from opentelemetry.util import types
+from opentelemetry.trace import StatusCode
 
-from genkit._core._environment import is_dev_environment
 from genkit._core._error import GenkitError, GenkitInterrupt
 from genkit._core._logger import get_logger
 from genkit._core._telemetry._attrs import Attr, State, metadata_key
-from genkit._core._telemetry._default_exporter import create_span_processor
 from genkit._core._telemetry._instrumentation import (
     SpanMetadata,
     SpanNext,
-    configure_instrumentation,
-    instrumentations,
-    is_instrumented_by,
     parent_path_context,
     start_attributes,
     to_json_attr,
@@ -129,6 +118,10 @@ class OtelInstrumentation:
         self._cached_tracer: trace_api.Tracer | None = None
 
     @property
+    def tracer_provider(self) -> TracerProvider | None:
+        return self._tracer_provider
+
+    @property
     def tracer(self) -> trace_api.Tracer:
         if self._cached_tracer is None:
             provider = self._tracer_provider or trace_api.get_tracer_provider()
@@ -179,133 +172,3 @@ class OtelInstrumentation:
                     raise
         finally:
             parent_path_context.reset(path_token)
-
-
-def init_provider() -> TracerProvider:
-    """Init and return the global tracer provider."""
-    tracer_provider = trace_api.get_tracer_provider()
-
-    if tracer_provider is None or not isinstance(tracer_provider, TracerProvider):  # pyright: ignore[reportUnnecessaryComparison]
-        tracer_provider = TracerProvider()
-        trace_api.set_tracer_provider(tracer_provider)
-        # Booting a tracer shouldn't rewrite the process log format.
-        # pyrefly: ignore[missing-attribute]
-        LoggingInstrumentor().instrument(set_logging_format=False)
-        logger.debug('Creating a new global tracer provider for telemetry.')
-
-    if not isinstance(tracer_provider, TracerProvider):  # pyright: ignore[reportUnnecessaryIsInstance]
-        raise TypeError(
-            f'The current trace provider is not an instance of TracerProvider.  It is of type: {type(tracer_provider)}'
-        )
-
-    return tracer_provider
-
-
-def is_placeholder_provider(provider: object) -> bool:
-    """True when the global provider is still OTel's unset proxy / no-op."""
-    return isinstance(provider, (ProxyTracerProvider, NoOpTracerProvider))
-
-
-def provider_for_exporters() -> tuple[TracerProvider, bool]:
-    """Provider minting Genkit OTel spans, and whether they handed it to us.
-
-    If they already configured ``OtelInstrumentation(tracer_provider=theirs)``,
-    exporters have to land on ``theirs`` or Cloud Trace stays empty. Otherwise
-    the global provider.
-    """
-    for inst in instrumentations:
-        if not isinstance(inst, OtelInstrumentation):
-            continue
-        provider = inst._tracer_provider
-        if provider is None:
-            continue
-        if not isinstance(provider, TracerProvider):
-            raise TypeError(
-                'Cannot attach an exporter: OtelInstrumentation is using '
-                f'{type(provider).__name__}, not a TracerProvider.'
-            )
-        return provider, True
-    return init_provider(), False
-
-
-def add_custom_exporter(exporter: SpanExporter | None, name: str = 'last') -> None:
-    """Attach a span exporter to the provider minting Genkit spans.
-
-    If you passed ``tracer_provider=`` to ``OtelInstrumentation``, the
-    exporter hangs there. Otherwise the process-global provider. This
-    does not turn tracing on. Call ``configure_instrumentation`` so
-    spans exist for the exporter to see. Under ``genkit start``,
-    ``Genkit()`` still owns the Developer UI HTTP poster.
-    """
-    if exporter is None:
-        logger.warn(f'{name} exporter is None')
-        return
-
-    provider, theirs = provider_for_exporters()
-    try:
-        provider.add_span_processor(create_span_processor(exporter))
-        logger.debug(f'{name} exporter added successfully.')
-    except Exception:
-        logger.error(f'tracing.add_custom_exporter: failed to add exporter {name}')
-        logger.exception('Failed to add custom exporter')
-        if theirs:
-            raise
-
-
-def maybe_configure_otel_for_exporters() -> None:
-    """Turn on OTel when nothing else will mint Genkit spans.
-
-    Skip if you already configured ``OtelInstrumentation``, or if
-    ``Genkit()`` under ``genkit start`` will still attach the Developer
-    UI HTTP poster (``GENKIT_ENV=dev`` and a collector URL). Call after
-    exporters are attached.
-    """
-    if is_instrumented_by(OtelInstrumentation):
-        return
-    if is_dev_environment() and os.environ.get('GENKIT_TELEMETRY_SERVER'):
-        return
-    configure_instrumentation(OtelInstrumentation())
-
-
-class PluginTracer:
-    """Follows the provider minting Genkit spans. No-op when uninstrumented."""
-
-    def inner(self) -> trace_api.Tracer:
-        if not is_instrumented_by(OtelInstrumentation):
-            return NoOpTracer()
-        for inst in instrumentations:
-            if isinstance(inst, OtelInstrumentation):
-                return inst.tracer
-        return NoOpTracer()
-
-    def start_as_current_span(
-        self,
-        name: str,
-        context: Context | None = None,
-        kind: SpanKind = SpanKind.INTERNAL,
-        attributes: types.Attributes = None,
-        links: Sequence[Link] | None = None,
-        start_time: int | None = None,
-        record_exception: bool = True,
-        set_status_on_exception: bool = True,
-        end_on_exit: bool = True,
-    ) -> AbstractContextManager[Span]:
-        # Imagen and Veo open their spans on this name. Keep it a real method
-        # so those call sites stay valid even when no provider is minting yet.
-        return self.inner().start_as_current_span(
-            name,
-            context=context,
-            kind=kind,
-            attributes=attributes,
-            links=links,
-            start_time=start_time,
-            record_exception=record_exception,
-            set_status_on_exception=set_status_on_exception,
-            end_on_exit=end_on_exit,
-        )
-
-    def __getattr__(self, name: str) -> Any:  # noqa: ANN401
-        return getattr(self.inner(), name)
-
-
-tracer = PluginTracer()
