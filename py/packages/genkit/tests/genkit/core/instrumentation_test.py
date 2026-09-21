@@ -11,16 +11,16 @@ from collections.abc import Awaitable, Callable, Mapping
 
 import pytest
 
-from genkit.telemetry import (
+from genkit._core._telemetry.instrumentation import (
     SpanContext,
     SpanMetadata,
-    configure_instrumentation,
     is_instrumented_by,
     reset_instrumentation,
     run_in_new_span,
     set_custom_metadata_attributes,
     set_span_state,
 )
+from genkit.telemetry import OtelInstrumentation, configure_instrumentation
 
 
 class RecordedSpan:
@@ -196,18 +196,14 @@ def test_configure_rejects_junk_at_the_boundary() -> None:
 
 
 def test_otel_instrumentation_rejects_junk_tracer_provider() -> None:
-    from genkit.telemetry import OtelInstrumentation
-
     with pytest.raises(TypeError, match='TracerProvider'):
         OtelInstrumentation(tracer_provider=object())  # type: ignore[arg-type]
 
 
 def test_configure_rejects_the_provider_class() -> None:
-    from genkit.telemetry import OtelInstrumentation
-
     with pytest.raises(
         TypeError,
-        match='type genkit._core._instrumentation.otel.OtelInstrumentation',
+        match='type genkit._core._telemetry.otel.OtelInstrumentation',
     ):
         configure_instrumentation(OtelInstrumentation)  # type: ignore[arg-type]
 

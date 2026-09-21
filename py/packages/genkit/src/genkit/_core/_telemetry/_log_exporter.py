@@ -89,7 +89,7 @@ def enable_log_export(*, url: str) -> None:
     if not url or logs_opted_out() or not is_dev_environment():
         return
     # Late import: _default_exporter pulls get_logger, and get_logger tees here.
-    from genkit._core._trace._default_exporter import resolve_telemetry_server_url
+    from genkit._core._telemetry._default_exporter import resolve_telemetry_server_url
 
     try:
         resolved = resolve_telemetry_server_url(

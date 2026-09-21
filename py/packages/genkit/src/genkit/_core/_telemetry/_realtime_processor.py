@@ -21,7 +21,7 @@ from opentelemetry.sdk.trace import ReadableSpan, Span
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 
 from genkit._core._compat import override
-from genkit._core._trace._suppress import suppress_telemetry
+from genkit._core._telemetry.instrumentation import suppress_telemetry
 
 
 class RealtimeSpanProcessor(SimpleSpanProcessor):
@@ -37,7 +37,7 @@ class RealtimeSpanProcessor(SimpleSpanProcessor):
 
     @override
     def on_end(self, span: ReadableSpan) -> None:
-        """Skip export entirely for suppressed traces (e.g. prompt keystroke previews)."""
+        """Skip export for prompt-playground re-renders and other ignored runs."""
         if suppress_telemetry.get():
             return
         super().on_end(span)

@@ -31,14 +31,14 @@ from genkit._core._error import (
     wrap_http_error,
 )
 from genkit._core._http_client import get_cached_client
-from genkit._core._instrumentation.otel import add_custom_exporter, maybe_configure_otel_for_exporters, tracer
 from genkit._core._loop_cache import _loop_local_client as loop_local_client
 from genkit._core._middleware import new_middleware
 from genkit._core._model import ModelConfig
 from genkit._core._plugin import MiddlewarePlugin, Plugin
 from genkit._core._schema import to_json_schema
-from genkit._core._trace._adjusting_exporter import AdjustingTraceExporter, RedactedSpan
-from genkit._core._trace._path import to_display_path
+from genkit._core._telemetry._adjusting_exporter import AdjustingTraceExporter, RedactedSpan
+from genkit._core._telemetry._path import to_display_path
+from genkit._core._telemetry.otel import add_custom_exporter, maybe_configure_otel_for_exporters, tracer
 from genkit._core._typing import ActionMetadata
 
 # Embedder domain re-exports

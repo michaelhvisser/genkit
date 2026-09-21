@@ -24,7 +24,7 @@ from pydantic import BaseModel, Field
 
 from genkit._ai._tools import Interrupt
 from genkit._core._action import ActionKind
-from genkit._core._instrumentation.instrumentation import run_in_new_span
+from genkit._core._telemetry.instrumentation import run_in_new_span
 from genkit.middleware import BaseMiddleware, GenerateMiddlewareContext, MultipartToolResponse, ToolHookParams
 
 

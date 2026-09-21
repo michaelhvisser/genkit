@@ -97,8 +97,6 @@ from genkit._core._dap import (
 )
 from genkit._core._environment import is_dev_environment
 from genkit._core._error import GenkitError, RuntimeErrorReason, StatusName
-from genkit._core._instrumentation.http import maybe_inject_dev_instrumentation
-from genkit._core._instrumentation.instrumentation import run_in_new_span
 from genkit._core._logger import configure_logging, get_logger, resolve_level
 from genkit._core._middleware import (
     BaseMiddleware,
@@ -111,6 +109,8 @@ from genkit._core._protocols import SessionLike
 from genkit._core._reflection import ReflectionServer, ServerSpec, create_reflection_asgi_app
 from genkit._core._reflection_v2 import ReflectionServerV2
 from genkit._core._registry import Registry
+from genkit._core._telemetry.http import maybe_inject_dev_instrumentation
+from genkit._core._telemetry.instrumentation import run_in_new_span
 from genkit._core._typing import (
     BaseDataPoint,
     Embedding,

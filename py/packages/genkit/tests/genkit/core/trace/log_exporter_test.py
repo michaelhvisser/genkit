@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -20,9 +21,8 @@ from structlog.testing import capture_logs
 
 from genkit._core._constants import GENKIT_VERSION
 from genkit._core._environment import GENKIT_ENV
-from genkit._core._instrumentation.instrumentation import run_in_new_span
 from genkit._core._logger import get_logger, is_debug_enabled
-from genkit._core._trace._log_exporter import (
+from genkit._core._telemetry._log_exporter import (
     BATCH_DELAY_S,
     GENKIT_OTEL_ENABLE_LOGS,
     LOG_ENDPOINT,
@@ -39,6 +39,9 @@ from genkit._core._trace._log_exporter import (
     put_poison_pill,
     reset_log_export,
 )
+from genkit._core._telemetry.instrumentation import reset_instrumentation, run_in_new_span
+from genkit._core._telemetry.otel import init_provider
+from genkit.telemetry import OtelInstrumentation, configure_instrumentation
 
 
 @pytest.fixture
@@ -125,11 +128,6 @@ def test_build_log_record_stamps_active_span() -> None:
         captured['traceId'] = trace_id
         captured['spanId'] = span_id
 
-    import asyncio
-
-    from genkit._core._instrumentation.otel import init_provider
-    from genkit.telemetry import OtelInstrumentation, configure_instrumentation, reset_instrumentation
-
     provider = init_provider()
     reset_instrumentation()
     configure_instrumentation(OtelInstrumentation(tracer_provider=provider))
@@ -184,7 +182,7 @@ def test_export_does_not_stall_on_hung_collector() -> None:
         release.wait(timeout=5)
         raise httpx.ConnectError('hung')
 
-    with patch('genkit._core._trace._log_exporter.httpx.Client') as mock_client_class:
+    with patch('genkit._core._telemetry._log_exporter.httpx.Client') as mock_client_class:
         mock_client = MagicMock()
         mock_client.post.side_effect = blocking_post
         mock_client_class.return_value.__enter__ = MagicMock(return_value=mock_client)
@@ -198,7 +196,7 @@ def test_export_does_not_stall_on_hung_collector() -> None:
         assert elapsed < 0.5
         assert started.wait(timeout=1)
         release.set()
-        from genkit._core._trace._log_exporter import _exporter
+        from genkit._core._telemetry._log_exporter import _exporter
 
         assert _exporter is not None
         assert _exporter.force_flush(timeout_s=2) is True
@@ -211,7 +209,7 @@ def test_transport_failure_logs_one_error() -> None:
     enable_log_export(url='http://127.0.0.1:1')
     with capture_logs() as entries:
         emit_log(level=logging.INFO, event='hello', attrs={})
-        from genkit._core._trace._log_exporter import _exporter
+        from genkit._core._telemetry._log_exporter import _exporter
 
         assert _exporter is not None
         assert _exporter.force_flush(timeout_s=2) is True
@@ -227,7 +225,7 @@ def test_transport_failure_logs_one_error() -> None:
 def test_overflow_drops_and_warns_once() -> None:
     """A full queue drops the record and warns once — emit never blocks."""
     enable_log_export(url='http://127.0.0.1:1')
-    from genkit._core._trace._log_exporter import _exporter
+    from genkit._core._telemetry._log_exporter import _exporter
 
     assert _exporter is not None
     record = build_log_record(level=logging.DEBUG, event='overflow', attrs={})
@@ -257,7 +255,7 @@ def test_posts_otlp_path_and_batches() -> None:
         response.status_code = 200
         return response
 
-    with patch('genkit._core._trace._log_exporter.httpx.Client') as mock_client_class:
+    with patch('genkit._core._telemetry._log_exporter.httpx.Client') as mock_client_class:
         mock_client = MagicMock()
         mock_client.post.side_effect = capture_post
         mock_client_class.return_value.__enter__ = MagicMock(return_value=mock_client)
@@ -266,7 +264,7 @@ def test_posts_otlp_path_and_batches() -> None:
         enable_log_export(url='http://localhost:4033')
         emit_log(level=logging.DEBUG, event='a', attrs={'n': 1})
         emit_log(level=logging.INFO, event='b', attrs={})
-        from genkit._core._trace._log_exporter import _exporter
+        from genkit._core._telemetry._log_exporter import _exporter
 
         assert _exporter is not None
         assert _exporter.force_flush(timeout_s=2) is True
@@ -288,7 +286,7 @@ def test_get_logger_tees_debug_when_console_is_info() -> None:
     """GENKIT_LOG=info keeps the TTY quiet; the Dev UI still gets debug."""
     enable_log_export(url='http://127.0.0.1:9')
     from genkit._core._logger import configure_structlog_level
-    from genkit._core._trace._log_exporter import _exporter
+    from genkit._core._telemetry._log_exporter import _exporter
 
     with patch.dict(os.environ, {'GENKIT_LOG': 'info'}):
         structlog_ok = configure_structlog_level()
@@ -319,7 +317,7 @@ def test_get_logger_tees_debug_when_console_is_info() -> None:
 @pytest.mark.usefixtures('_reset_export', '_dev_env')
 def test_worker_stops_when_client_construction_fails() -> None:
     """Client() raising must flip stopped so debug branches stop building records."""
-    with patch('genkit._core._trace._log_exporter.httpx.Client', side_effect=RuntimeError('no client')):
+    with patch('genkit._core._telemetry._log_exporter.httpx.Client', side_effect=RuntimeError('no client')):
         enable_log_export(url='http://127.0.0.1:9')
         deadline = time.monotonic() + 2.0
         while log_export_is_enabled() and time.monotonic() < deadline:
@@ -413,7 +411,7 @@ def test_shutdown_does_not_wait_for_export_timeout() -> None:
         release.wait(timeout=10)
         raise httpx.ConnectError('hung')
 
-    with patch('genkit._core._trace._log_exporter.httpx.Client') as mock_client_class:
+    with patch('genkit._core._telemetry._log_exporter.httpx.Client') as mock_client_class:
         mock_client = MagicMock()
         mock_client.post.side_effect = blocking_post
         mock_client_class.return_value.__enter__ = MagicMock(return_value=mock_client)

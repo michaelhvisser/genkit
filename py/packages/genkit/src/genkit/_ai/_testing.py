@@ -25,7 +25,7 @@ from typing import Any, TypedDict, cast
 from pydantic import BaseModel, Field
 
 from genkit._core._action import Action, ActionKind, ActionRunContext
-from genkit._core._instrumentation.instrumentation import run_in_new_span
+from genkit._core._telemetry.instrumentation import run_in_new_span
 from genkit._core._typing import (
     ModelInfo,
     Role,

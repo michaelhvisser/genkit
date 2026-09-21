@@ -13,6 +13,10 @@ from typing import Any, cast
 
 import pytest
 import yaml
+from opentelemetry import trace as trace_api
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from genkit import ActionKind, Document, Genkit, Message, MiddlewareRef, ModelResponse, ModelResponseChunk, Part
@@ -30,6 +34,7 @@ from genkit._core._action import ActionRunContext
 from genkit._core._error import GenkitError, PublicError, RuntimeErrorReason
 from genkit._core._model import GenerateActionOptions, ModelRequest, Resume
 from genkit._core._registry import Registry
+from genkit._core._telemetry.instrumentation import reset_instrumentation
 from genkit._core._typing import (
     FinishReason,
     GenerateActionOutputConfig,
@@ -49,6 +54,7 @@ from genkit.middleware import (
     ToolHookParams,
 )
 from genkit.plugin_api import MiddlewarePlugin, new_middleware
+from genkit.telemetry import OtelInstrumentation, configure_instrumentation
 
 
 def _to_dict(obj: object) -> object:
@@ -6331,12 +6337,6 @@ async def test_generate_format_parse_error_keeps_model_text() -> None:
 @pytest.mark.asyncio
 async def test_util_generate_dead_turn_paints_span_error() -> None:
     """Dev UI /util/generate after a dead turn must not look like a win on the action span."""
-    from opentelemetry import trace as trace_api
-    from opentelemetry.sdk.trace import TracerProvider
-    from opentelemetry.sdk.trace.export import SimpleSpanProcessor
-    from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-
-    from genkit.telemetry import OtelInstrumentation, configure_instrumentation, reset_instrumentation
 
     class Recipe(BaseModel):
         title: str

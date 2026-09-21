@@ -35,6 +35,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from genkit._core._telemetry.instrumentation import is_instrumented_by, reset_instrumentation
+from genkit.telemetry import OtelInstrumentation
+
 # Environment variable and value constants (matching genkit._core._environment)
 _GENKIT_ENV = 'GENKIT_ENV'
 _ENV_DEV = 'dev'
@@ -43,8 +46,6 @@ _ENV_PROD = 'prod'
 
 @pytest.fixture(autouse=True)
 def _reset_instrumentation() -> Generator[None, None, None]:
-    from genkit.telemetry import reset_instrumentation
-
     reset_instrumentation()
     yield
     reset_instrumentation()
@@ -152,8 +153,6 @@ def test_enable_google_cloud_telemetry_skips_in_dev_without_force() -> None:
         # Call without force_dev_export (using legacy force_export)
         enable_google_cloud_telemetry(force_dev_export=False)
 
-        from genkit.telemetry import OtelInstrumentation, is_instrumented_by
-
         # Verify nothing was called
         mock_gcp_exporter.assert_not_called()
         mock_add_exporter.assert_not_called()
@@ -177,8 +176,6 @@ def test_enable_google_cloud_telemetry_exports_in_dev_with_force() -> None:
 
         enable_google_cloud_telemetry(force_dev_export=True)
 
-        from genkit.telemetry import OtelInstrumentation, is_instrumented_by
-
         mock_gcp_exporter.assert_called_once()
         mock_add_exporter.assert_called_once()
         assert is_instrumented_by(OtelInstrumentation)
@@ -200,8 +197,6 @@ def test_enable_google_cloud_telemetry_disable_traces() -> None:
 
         # Call with disable_traces=True (JS/Go: disableTraces)
         enable_google_cloud_telemetry(disable_traces=True)
-
-        from genkit.telemetry import OtelInstrumentation, is_instrumented_by
 
         # Verify trace exporter was NOT created
         mock_gcp_exporter.assert_not_called()
@@ -425,8 +420,6 @@ def test_enable_in_prod_installs_otel() -> None:
     ):
         from genkit_google_cloud.telemetry.tracing import enable_google_cloud_telemetry
 
-        from genkit.telemetry import OtelInstrumentation, is_instrumented_by
-
         enable_google_cloud_telemetry(project_id='my-project')
         assert is_instrumented_by(OtelInstrumentation)
 
@@ -449,8 +442,6 @@ def test_enable_under_genkit_start_does_not_install_otel() -> None:
         patch('genkit_google_cloud.telemetry.config.metrics'),
     ):
         from genkit_google_cloud.telemetry.tracing import enable_google_cloud_telemetry
-
-        from genkit.telemetry import OtelInstrumentation, is_instrumented_by
 
         enable_google_cloud_telemetry(force_dev_export=True, project_id='my-project')
         assert not is_instrumented_by(OtelInstrumentation)

@@ -26,17 +26,18 @@ from genkit import ActionKind, Genkit
 from genkit._ai._tools import Interrupt, ToolRunContext
 from genkit._core._action import Action, ActionRunContext
 from genkit._core._error import GenkitError
-from genkit._core._instrumentation.instrumentation import (
+from genkit._core._telemetry._attrs import metadata_key
+from genkit._core._telemetry._realtime_processor import RealtimeSpanProcessor
+from genkit._core._telemetry.instrumentation import (
     SpanMetadata,
+    is_instrumented_by,
     parent_path_context,
     reset_instrumentation,
     run_in_new_span,
     start_attributes,
 )
-from genkit._core._instrumentation.otel import OtelInstrumentation, add_custom_exporter
-from genkit._core._trace._attrs import metadata_key
-from genkit._core._trace._realtime_processor import RealtimeSpanProcessor
-from genkit.telemetry import configure_instrumentation, is_instrumented_by
+from genkit._core._telemetry.otel import OtelInstrumentation, add_custom_exporter
+from genkit.telemetry import configure_instrumentation
 
 
 @pytest.fixture(autouse=True)

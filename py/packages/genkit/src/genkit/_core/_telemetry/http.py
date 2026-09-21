@@ -35,8 +35,8 @@ from urllib.parse import urljoin, urlparse
 from .._environment import is_dev_environment
 from .._error import GenkitError, GenkitInterrupt
 from .._logger import get_logger
-from .._trace._attrs import Attr, State, metadata_key
-from .._trace._path import build_path
+from ._attrs import Attr, State, metadata_key
+from ._path import build_path
 from .instrumentation import (
     Instrumentation,
     SpanMetadata,

@@ -46,7 +46,6 @@ from websockets.asyncio.server import serve
 
 from genkit import Genkit
 from genkit._core._action import Action, ActionKind, ActionRunContext, BidiAction
-from genkit._core._instrumentation.otel import init_provider
 from genkit._core._middleware import BaseMiddleware
 from genkit._core._model import AgentInit, AgentInput, ModelConfig
 from genkit._core._reflection_v2 import (
@@ -55,8 +54,10 @@ from genkit._core._reflection_v2 import (
     ReflectionServerV2,
 )
 from genkit._core._registry import Registry
+from genkit._core._telemetry.instrumentation import reset_instrumentation
+from genkit._core._telemetry.otel import init_provider
 from genkit.model import model_ref
-from genkit.telemetry import OtelInstrumentation, configure_instrumentation, reset_instrumentation
+from genkit.telemetry import OtelInstrumentation, configure_instrumentation
 
 
 @pytest.fixture(autouse=True)

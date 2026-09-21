@@ -39,11 +39,11 @@ from starlette.routing import Route
 from genkit._core._action import Action, BidiAction
 from genkit._core._constants import GENKIT_VERSION
 from genkit._core._error import get_reflection_json
-from genkit._core._instrumentation.http import connect_developer_ui_collector
 from genkit._core._logger import get_logger
 from genkit._core._middleware import GenerateMiddleware
 from genkit._core._model import AgentInit, AgentInput, ModelRef
 from genkit._core._registry import Registry
+from genkit._core._telemetry.http import connect_developer_ui_collector
 
 logger = get_logger(__name__)
 

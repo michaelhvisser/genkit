@@ -26,6 +26,9 @@ from genkit._core._action import (
 )
 from genkit._core._error import GenkitError, RuntimeErrorReason
 from genkit._core._model import OutputConfig
+from genkit._core._telemetry.instrumentation import reset_instrumentation
+from genkit._core._telemetry.otel import init_provider
+from genkit.telemetry import OtelInstrumentation, configure_instrumentation
 
 
 def test_action_enum_behaves_like_str() -> None:
@@ -268,9 +271,6 @@ async def test_action_raises_errors() -> None:
 
 @pytest.mark.asyncio
 async def test_action_error_includes_trace_id_when_instrumented() -> None:
-    from genkit._core._instrumentation.otel import init_provider
-    from genkit.telemetry import OtelInstrumentation, configure_instrumentation, reset_instrumentation
-
     reset_instrumentation()
     configure_instrumentation(OtelInstrumentation(tracer_provider=init_provider()))
     try:

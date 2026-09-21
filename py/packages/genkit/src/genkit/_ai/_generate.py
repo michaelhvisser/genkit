@@ -67,7 +67,6 @@ from genkit._core._background import (
     stamp_operation_action,
 )
 from genkit._core._error import GenkitError, GenkitRuntimeError, PublicError, RuntimeErrorReason
-from genkit._core._instrumentation.instrumentation import SpanContext, run_in_new_span, set_span_state
 from genkit._core._logger import get_logger, is_debug_enabled
 from genkit._core._middleware import (
     BaseMiddleware,
@@ -92,7 +91,8 @@ from genkit._core._model import (
 from genkit._core._protocols import RegistryLike, SessionLike
 from genkit._core._registry import Registry
 from genkit._core._schema import check_output_schema
-from genkit._core._trace._attrs import State
+from genkit._core._telemetry._attrs import State
+from genkit._core._telemetry.instrumentation import SpanContext, run_in_new_span, set_span_state
 from genkit._core._typing import (
     Error,
     FinishReason,

@@ -45,7 +45,6 @@ from genkit._ai._json_patch import diff_json
 from genkit._core._action import ActionRunContext, StreamingCallback, get_current_context
 from genkit._core._channel import CloseableQueue, QueueShutDown
 from genkit._core._error import GenkitError, GenkitRuntimeError, RuntimeErrorReason
-from genkit._core._instrumentation.instrumentation import SpanContext, run_in_new_span
 from genkit._core._logger import get_logger
 from genkit._core._model import (
     AgentInit,
@@ -62,6 +61,7 @@ from genkit._core._model import (
     SessionState,
 )
 from genkit._core._registry import Registry
+from genkit._core._telemetry.instrumentation import SpanContext, run_in_new_span
 from genkit._core._typing import (
     AgentFinishReason,
     FinishReason,

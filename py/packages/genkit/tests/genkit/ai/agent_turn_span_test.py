@@ -34,11 +34,11 @@ from genkit._ai._agents._runtime import SessionRunner
 from genkit._ai._agents._session import Session
 from genkit._ai._agents._types import TurnContext, TurnResult
 from genkit._core._action import ActionRunContext
-from genkit._core._instrumentation.instrumentation import reset_instrumentation
-from genkit._core._instrumentation.otel import OtelInstrumentation
 from genkit._core._model import AgentInput, AgentResult, Message, SessionState
 from genkit._core._registry import Registry
-from genkit._core._trace._attrs import Attr, metadata_key
+from genkit._core._telemetry._attrs import Attr, metadata_key
+from genkit._core._telemetry.instrumentation import reset_instrumentation
+from genkit._core._telemetry.otel import OtelInstrumentation
 from genkit.exp.agent import AgentFinishReason, InMemorySessionStore
 from genkit.telemetry import configure_instrumentation
 

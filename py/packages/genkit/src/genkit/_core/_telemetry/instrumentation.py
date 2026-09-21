@@ -14,7 +14,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Telemetry dispatcher and backend-agnostic types. No OpenTelemetry."""
+"""Telemetry dispatcher and backend-agnostic types. No OpenTelemetry.
+
+A new backend or exporter is another file in this folder. App code
+keeps importing from ``genkit.telemetry``.
+"""
 
 from __future__ import annotations
 
@@ -28,7 +32,7 @@ from typing import Any, Protocol, TypeVar, runtime_checkable
 
 from pydantic import BaseModel
 
-from .._trace._attrs import Attr, metadata_key
+from ._attrs import Attr, metadata_key
 
 T = TypeVar('T')
 T_co = TypeVar('T_co', covariant=True)
@@ -111,6 +115,10 @@ instrumentations: list[Instrumentation] = []
 # Active SpanContext so set_custom_metadata_attributes can reach it.
 current_span: ContextVar[SpanContext | None] = ContextVar('genkit_span_context', default=None)
 parent_path_context: ContextVar[str] = ContextVar('genkit_parent_path', default='')
+# Prompt playground re-renders on each edit. Those runs are not real traces —
+# the flag stays set for the whole action so nested model/tool spans stay
+# off the Traces tab too.
+suppress_telemetry: ContextVar[bool] = ContextVar('suppress_telemetry', default=False)
 
 
 def describe_value(value: object) -> str:
