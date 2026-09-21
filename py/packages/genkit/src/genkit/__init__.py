@@ -46,38 +46,31 @@ from genkit._ai._prompt import (
 )
 from genkit._ai._tools import (
     Interrupt,
+    MultipartToolResponse,
     Tool,
     ToolRunContext,
     respond_to_interrupt,
+    response,
     restart_tool,
     tool,
 )
 from genkit._core._action import Action, ActionRunContext, StreamResponse
 from genkit._core._error import ErrorResponseMetadata, GenkitError, PublicError
-from genkit._core._model import Document
+from genkit._core._model import Document, Part
 from genkit._core._plugin import Plugin
 from genkit._core._typing import (
-    CustomPart,
-    DocumentPart,
     Media,
-    MediaPart,
     Metadata,
     MiddlewareRef,
-    MultipartToolResponse,
-    Part,
-    ReasoningPart,
     Role,
-    TextPart,
     ToolChoice,
     ToolRequest,
-    ToolRequestPart,
     ToolResponse,
-    ToolResponsePart,
 )
 
 # Import embedder-related types from the embedder namespace
 from genkit.embedder import (
-    EmbedderOptions,
+    EmbedderInfo,
     EmbedderRef,
     Embedding,
     EmbedRequest,
@@ -98,6 +91,7 @@ from genkit.model import (
     Stage,
     Supports,
     ToolDefinition,
+    background_model,
 )
 
 # Flow is an alias for Action (used in samples for flow type hints)
@@ -112,7 +106,7 @@ __all__ = [
     'StreamResponse',
     'EmbedRequest',
     'EmbedResponse',
-    'EmbedderOptions',
+    'EmbedderInfo',
     'EmbedderRef',
     'ModelConfigDict',
     'ModelInfo',
@@ -125,34 +119,29 @@ __all__ = [
     'Interrupt',
     'Tool',
     'respond_to_interrupt',
+    'response',
     'restart_tool',
     'tool',
+    'background_model',
     # Content types
     'Constrained',
-    'CustomPart',
     'Embedding',
     'Metadata',
-    'ReasoningPart',
     'FinishReason',
     'ModelUsage',
     'Media',
-    'MediaPart',
     'Message',
     'MultipartToolResponse',
     'Part',
     'Role',
     'Stage',
     'Supports',
-    'TextPart',
     'ToolChoice',
     'ToolDefinition',
     'ToolRequest',
-    'ToolRequestPart',
     'ToolResponse',
-    'ToolResponsePart',
     # Domain types
     'Document',
-    'DocumentPart',
     # Plugin interface
     'Plugin',
     # Middleware references (wire form for use= parameter)

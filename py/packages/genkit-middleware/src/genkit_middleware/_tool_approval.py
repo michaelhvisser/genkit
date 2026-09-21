@@ -23,6 +23,7 @@ from collections.abc import Awaitable, Callable
 from pydantic import BaseModel, Field
 
 from genkit._ai._tools import Interrupt
+from genkit._core._action import ActionKind
 from genkit._core._instrumentation import run_in_new_span
 from genkit.middleware import BaseMiddleware, GenerateMiddlewareContext, MultipartToolResponse, ToolHookParams
 
@@ -53,7 +54,10 @@ class ToolApproval(BaseMiddleware[ToolApprovalConfig]):
         if isinstance(resumed, dict) and (resumed.get('toolApproved') or resumed.get('tool_approved')):
             return await next_fn(params, ctx)
 
-        tool_input = params.tool_request_part.tool_request.input
+        tool_req = params.tool_request_part.tool_request
+        if tool_req is None:
+            raise ValueError('wrap_tool needs a tool request part')
+        tool_input = tool_req.input
 
         async def body(_span: object) -> MultipartToolResponse:
             raise Interrupt({'message': f'Tool not in approved list: {tool_name}'})
@@ -62,6 +66,6 @@ class ToolApproval(BaseMiddleware[ToolApprovalConfig]):
             tool_name,
             body,
             action_type='action',
-            subtype='tool',
+            subtype=ActionKind.TOOL,
             input=tool_input,
         )

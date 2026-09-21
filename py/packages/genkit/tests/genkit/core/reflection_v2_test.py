@@ -47,7 +47,7 @@ from websockets.asyncio.server import serve
 from genkit import Genkit
 from genkit._core._action import Action, ActionKind, ActionRunContext, BidiAction
 from genkit._core._middleware import BaseMiddleware
-from genkit._core._model import ModelConfig
+from genkit._core._model import AgentInit, AgentInput, ModelConfig
 from genkit._core._otel_instrumentation import init_provider
 from genkit._core._reflection_v2 import (
     JSON_RPC_INVALID_PARAMS,
@@ -55,7 +55,6 @@ from genkit._core._reflection_v2 import (
     ReflectionServerV2,
 )
 from genkit._core._registry import Registry
-from genkit._core._typing import AgentInit, AgentInput
 from genkit.model import model_ref
 from genkit.telemetry import OtelInstrumentation, configure_instrumentation, reset_instrumentation
 
@@ -260,6 +259,38 @@ async def test_reflection_server_v2_list_values(fake_manager: FakeReflectionMana
         values = result.get('values')
         assert isinstance(values, dict)
         assert values.get('defaultModel') == 'my-model'
+    finally:
+        await _stop_client(client, task)
+
+
+@pytest.mark.asyncio
+async def test_reflection_server_v2_list_values_a2ui_catalog(
+    fake_manager: FakeReflectionManager,
+) -> None:
+    """Developer UI can list registered A2UI catalogs."""
+    registry = Registry()
+    catalog = {
+        'id': 'https://example.com/catalogs/banner.json',
+        'components': [{'name': 'Banner', 'description': 'A banner.', 'props': 'title: string.'}],
+    }
+    registry.register_value('a2ui-catalog', catalog['id'], catalog)
+
+    client, task = await _run_client_lifecycle(registry, fake_manager)
+    try:
+        await ack_register(fake_manager)
+        await fake_manager.write_rpc({
+            'jsonrpc': '2.0',
+            'method': 'listValues',
+            'params': {'type': 'a2ui-catalog'},
+            'id': '2c',
+        })
+        resp = await fake_manager.read_rpc()
+        assert resp.get('id') == '2c'
+        result = resp.get('result')
+        assert isinstance(result, dict)
+        values = result.get('values')
+        assert isinstance(values, dict)
+        assert values.get(catalog['id']) == catalog
     finally:
         await _stop_client(client, task)
 

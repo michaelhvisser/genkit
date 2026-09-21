@@ -25,7 +25,7 @@ from typing import Any, Generic
 from pydantic import BaseModel
 
 # Internal imports from sibling modules
-from genkit._ai._agents._client import AgentClient, part_roots
+from genkit._ai._agents._client import AgentClient
 from genkit._ai._agents._preamble import (
     apply_preamble_tags,
     tag_history_for_render,
@@ -70,24 +70,28 @@ from genkit._core._action import Action, ActionKind, ActionRunContext, BidiActio
 from genkit._core._error import GenkitError
 from genkit._core._instrumentation import set_custom_metadata_attributes
 from genkit._core._middleware import BaseMiddleware
-from genkit._core._model import ModelConfigDict, ModelRef, ModelRefConfigT
-from genkit._core._registry import Registry
-from genkit._core._typing import (
-    AgentAbortRequest,
-    AgentAbortResponse,
-    AgentFinishReason,
+from genkit._core._model import (
     AgentInit,
     AgentInput,
     AgentOutput,
     AgentResult,
     AgentStreamChunk,
-    GetSnapshotRequest,
-    MessageData,
-    MiddlewareRef,
+    Message,
+    ModelConfigDict,
+    ModelRef,
+    ModelRefConfigT,
     Part,
     Resume,
-    Role,
     SessionSnapshot,
+)
+from genkit._core._registry import Registry
+from genkit._core._typing import (
+    AgentAbortRequest,
+    AgentAbortResponse,
+    AgentFinishReason,
+    GetSnapshotRequest,
+    MiddlewareRef,
+    Role,
     SnapshotStatus,
     ToolRequest,
 )
@@ -457,7 +461,7 @@ def tool_input_key(value: object) -> str:
     return json.dumps(value, sort_keys=True, default=str)
 
 
-def validate_resume_against_history(resume: Resume, history: list[MessageData]) -> None:
+def validate_resume_against_history(resume: Resume, history: list[Message]) -> None:
     """Reject a resume that doesn't line up with the tool requests in history.
 
     A resumed turn answers tool requests the model actually made, so every
@@ -478,8 +482,8 @@ def validate_resume_against_history(resume: Resume, history: list[MessageData]) 
     for msg in reversed(history):
         if msg.role != Role.MODEL:
             continue
-        for root in part_roots(msg.content):
-            tr = getattr(root, 'tool_request', None)
+        for part in msg.content:
+            tr = part.tool_request
             if isinstance(tr, ToolRequest):
                 tool_requests.append(tr)
 
@@ -491,6 +495,8 @@ def validate_resume_against_history(resume: Resume, history: list[MessageData]) 
 
     for restart_part in resume.restart or []:
         tr = restart_part.tool_request
+        if tr is None:
+            continue
         match = find(tr.name, tr.ref)
         if match is None:
             raise GenkitError(
@@ -512,6 +518,8 @@ def validate_resume_against_history(resume: Resume, history: list[MessageData]) 
 
     for respond_part in resume.respond or []:
         resp = respond_part.tool_response
+        if resp is None:
+            continue
         if find(resp.name, resp.ref) is None:
             raise GenkitError(
                 status='INVALID_ARGUMENT',

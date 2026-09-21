@@ -26,7 +26,7 @@ import pytest
 from genkit_google_genai.models.utils import PartConverter
 from google import genai
 
-from genkit import Media, MediaPart, Part, ToolRequest, ToolRequestPart
+from genkit import Part, ToolRequest, ToolResponse
 
 
 class TestIsGeminiNativeUrl:
@@ -87,7 +87,7 @@ class TestToGeminiMediaPart:
     @pytest.mark.asyncio
     async def test_youtube_url_uses_file_data(self) -> None:
         """YouTube URLs are passed as file_data, NOT downloaded."""
-        part = Part(root=MediaPart(media=Media(url='https://www.youtube.com/watch?v=abc', content_type='video/mp4')))
+        part = Part.from_media('https://www.youtube.com/watch?v=abc', content_type='video/mp4')
 
         result = await PartConverter.to_gemini(part)
 
@@ -105,7 +105,7 @@ class TestToGeminiMediaPart:
     @pytest.mark.asyncio
     async def test_youtu_be_short_url_uses_file_data(self) -> None:
         """Short youtu.be URLs are passed as file_data."""
-        part = Part(root=MediaPart(media=Media(url='https://youtu.be/abc', content_type='video/mp4')))
+        part = Part.from_media('https://youtu.be/abc', content_type='video/mp4')
 
         result = await PartConverter.to_gemini(part)
 
@@ -118,7 +118,7 @@ class TestToGeminiMediaPart:
     async def test_files_api_url_uses_file_data(self) -> None:
         """Gemini Files API URLs are passed as file_data."""
         url = 'https://generativelanguage.googleapis.com/v1beta/files/abc123'
-        part = Part(root=MediaPart(media=Media(url=url, content_type='video/mp4')))
+        part = Part.from_media(url, content_type='video/mp4')
 
         result = await PartConverter.to_gemini(part)
 
@@ -130,7 +130,7 @@ class TestToGeminiMediaPart:
     @pytest.mark.asyncio
     async def test_regular_http_url_downloads_inline(self) -> None:
         """Regular HTTP URLs are downloaded and sent as inline_data."""
-        part = Part(root=MediaPart(media=Media(url='https://example.com/photo.jpg', content_type='image/jpeg')))
+        part = Part.from_media('https://example.com/photo.jpg', content_type='image/jpeg')
 
         mock_data = b'\x89PNG\r\n'
         with patch.object(
@@ -151,7 +151,7 @@ class TestToGeminiMediaPart:
     @pytest.mark.asyncio
     async def test_gs_uri_uses_file_data(self) -> None:
         """gs:// URIs are passed through as file_data (not downloaded)."""
-        part = Part(root=MediaPart(media=Media(url='gs://bucket/video.mp4', content_type='video/mp4')))
+        part = Part.from_media('gs://bucket/video.mp4', content_type='video/mp4')
 
         result = await PartConverter.to_gemini(part)
 
@@ -168,7 +168,7 @@ class TestToGeminiMediaPart:
         raw = b'hello'
         b64 = base64.b64encode(raw).decode('utf-8')
         url = f'data:text/plain;base64,{b64}'
-        part = Part(root=MediaPart(media=Media(url=url, content_type='text/plain')))
+        part = Part.from_media(url, content_type='text/plain')
 
         result = await PartConverter.to_gemini(part)
 
@@ -192,11 +192,11 @@ class TestFunctionCallRef:
             )
         )
         got = PartConverter.from_gemini(part)
-        assert isinstance(got.root, ToolRequestPart)
-        if got.root.tool_request.ref != 'call-abc':
-            pytest.fail(f'ref = {got.root.tool_request.ref!r}, want call-abc')
-        if got.root.tool_request.name != 'write_file':
-            pytest.fail(f'name = {got.root.tool_request.name!r}, want write_file')
+        assert got.tool_request is not None
+        if got.tool_request.ref != 'call-abc':
+            pytest.fail(f'ref = {got.tool_request.ref!r}, want call-abc')
+        if got.tool_request.name != 'write_file':
+            pytest.fail(f'name = {got.tool_request.name!r}, want write_file')
 
     def test_from_gemini_leaves_ref_unset_when_model_omits_id(self) -> None:
         part = genai.types.Part(
@@ -206,19 +206,17 @@ class TestFunctionCallRef:
             )
         )
         got = PartConverter.from_gemini(part)
-        assert isinstance(got.root, ToolRequestPart)
-        if got.root.tool_request.ref is not None:
-            pytest.fail(f'ref = {got.root.tool_request.ref!r}, want None')
+        assert got.tool_request is not None
+        if got.tool_request.ref is not None:
+            pytest.fail(f'ref = {got.tool_request.ref!r}, want None')
 
     @pytest.mark.asyncio
     async def test_to_gemini_round_trips_ref_as_function_call_id(self) -> None:
         part = Part(
-            root=ToolRequestPart(
-                tool_request=ToolRequest(
-                    name='write_file',
-                    ref='call-abc',
-                    input={'file_path': 'a.py', 'content': 'hi'},
-                )
+            tool_request=ToolRequest(
+                name='write_file',
+                ref='call-abc',
+                input={'file_path': 'a.py', 'content': 'hi'},
             )
         )
         got = await PartConverter.to_gemini(part)
@@ -230,11 +228,9 @@ class TestFunctionCallRef:
     @pytest.mark.asyncio
     async def test_to_gemini_omits_id_when_ref_unset(self) -> None:
         part = Part(
-            root=ToolRequestPart(
-                tool_request=ToolRequest(
-                    name='write_file',
-                    input={'file_path': 'a.py', 'content': 'hi'},
-                )
+            tool_request=ToolRequest(
+                name='write_file',
+                input={'file_path': 'a.py', 'content': 'hi'},
             )
         )
         got = await PartConverter.to_gemini(part)
@@ -242,3 +238,124 @@ class TestFunctionCallRef:
         assert got.function_call is not None
         if got.function_call.id is not None:
             pytest.fail(f'function_call.id = {got.function_call.id!r}, want None')
+
+
+class TestToolResponseToGemini:
+    """Structured output is FunctionResponse.response; media is FunctionResponse.parts."""
+
+    @pytest.mark.asyncio
+    async def test_bare_output_is_one_function_response(self) -> None:
+        part = Part(
+            tool_response=ToolResponse(
+                name='shot',
+                ref='s1',
+                output={'ok': True, 'label': 'lab'},
+            )
+        )
+        got = await PartConverter.to_gemini(part)
+        assert isinstance(got, genai.types.Part)
+        assert got.function_response is not None
+        if got.function_response.name != 'shot':
+            pytest.fail(f'name = {got.function_response.name!r}, want shot')
+        if got.function_response.id != 's1':
+            pytest.fail(f'id = {got.function_response.id!r}, want s1')
+        if got.function_response.response != {'name': 'shot', 'content': {'ok': True, 'label': 'lab'}}:
+            pytest.fail(f'response = {got.function_response.response!r}')
+        if got.function_response.parts:
+            pytest.fail(f'parts = {got.function_response.parts!r}, want empty')
+        if got.inline_data is not None:
+            pytest.fail('bare output must not add inline_data')
+
+    @pytest.mark.asyncio
+    async def test_string_output_is_wrapped_as_dict(self) -> None:
+        part = Part(tool_response=ToolResponse(name='weather', output='Sunny'))
+        got = await PartConverter.to_gemini(part)
+        assert isinstance(got, genai.types.Part)
+        assert got.function_response is not None
+        if got.function_response.response != {'name': 'weather', 'content': 'Sunny'}:
+            pytest.fail(f'response = {got.function_response.response!r}')
+        if got.function_response.parts:
+            pytest.fail(f'parts = {got.function_response.parts!r}, want empty')
+
+    @pytest.mark.asyncio
+    async def test_content_media_is_function_response_parts(self) -> None:
+        part = Part(
+            tool_response=ToolResponse(
+                name='shot',
+                output={'ok': True, 'label': 'lab'},
+                content=[{'media': {'contentType': 'image/png', 'url': 'data:image/png;base64,YWJj'}}],
+            )
+        )
+        got = await PartConverter.to_gemini(part)
+        assert isinstance(got, genai.types.Part)
+        assert got.function_response is not None
+        if got.function_response.response != {'name': 'shot', 'content': {'ok': True, 'label': 'lab'}}:
+            pytest.fail(f'response = {got.function_response.response!r}')
+        if got.inline_data is not None:
+            pytest.fail('media must live on function_response.parts, not a sibling Part')
+        fr_parts = got.function_response.parts or []
+        if len(fr_parts) != 1:
+            pytest.fail(f'parts = {len(fr_parts)}, want 1')
+        blob = fr_parts[0].inline_data
+        if blob is None:
+            pytest.fail('function_response.parts[0] missing inline_data')
+        if blob.mime_type != 'image/png':
+            pytest.fail(f'mime_type = {blob.mime_type!r}, want image/png')
+        if blob.data != b'abc':
+            pytest.fail(f"data = {blob.data!r}, want b'abc'")
+
+
+class TestToolResponseFromGemini:
+    """Inbound peels the dict wrap and keeps FunctionResponse.parts on the same tool."""
+
+    def test_unwraps_name_content_envelope(self) -> None:
+        part = genai.types.Part(
+            function_response=genai.types.FunctionResponse(
+                name='shot',
+                id='s1',
+                response={'name': 'shot', 'content': {'ok': True, 'label': 'lab'}},
+            )
+        )
+        got = PartConverter.from_gemini(part)
+        assert got.tool_response is not None
+        tr = got.tool_response
+        if tr.name != 'shot':
+            pytest.fail(f'name = {tr.name!r}, want shot')
+        if tr.ref != 's1':
+            pytest.fail(f'ref = {tr.ref!r}, want s1')
+        if tr.output != {'ok': True, 'label': 'lab'}:
+            pytest.fail(f'output = {tr.output!r}')
+        if tr.content is not None:
+            pytest.fail(f'content = {tr.content!r}, want None')
+
+    def test_unwraps_string_content(self) -> None:
+        part = genai.types.Part(
+            function_response=genai.types.FunctionResponse(
+                name='weather',
+                response={'name': 'weather', 'content': 'Sunny'},
+            )
+        )
+        got = PartConverter.from_gemini(part)
+        assert got.tool_response is not None
+        if got.tool_response.output != 'Sunny':
+            pytest.fail(f'output = {got.tool_response.output!r}, want Sunny')
+
+    @pytest.mark.asyncio
+    async def test_round_trip_keeps_output_and_media_together(self) -> None:
+        part = Part(
+            tool_response=ToolResponse(
+                name='shot',
+                ref='s1',
+                output={'ok': True, 'label': 'lab'},
+                content=[{'media': {'contentType': 'image/png', 'url': 'data:image/png;base64,YWJj'}}],
+            )
+        )
+        outbound = await PartConverter.to_gemini(part)
+        assert isinstance(outbound, genai.types.Part)
+        got = PartConverter.from_gemini(outbound)
+        assert got.tool_response is not None
+        tr = got.tool_response
+        if tr.output != {'ok': True, 'label': 'lab'}:
+            pytest.fail(f'output = {tr.output!r}')
+        if tr.content != [{'media': {'url': 'data:image/png;base64,YWJj', 'contentType': 'image/png'}}]:
+            pytest.fail(f'content = {tr.content!r}')

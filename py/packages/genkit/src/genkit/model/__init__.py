@@ -18,11 +18,14 @@
 
 from genkit._ai._model import (
     ModelConfigDict,
+    model,
     model_action_metadata,
     model_ref,
 )
-from genkit._core._background import BackgroundAction
+from genkit._core._background import BackgroundAction, background_model
 from genkit._core._model import (
+    Candidate,
+    Document,
     GenerateActionOptions,
     Message,
     ModelRef,
@@ -30,10 +33,10 @@ from genkit._core._model import (
     ModelResponse,
     ModelResponseChunk,
     ModelUsage,
+    Part,
     get_basic_usage_stats,
 )
 from genkit._core._typing import (
-    Candidate,
     Constrained,
     Error,
     FinishReason,
@@ -70,6 +73,8 @@ __all__ = [
     'Constrained',
     'Stage',
     # Factory functions and metadata
+    'model',
+    'background_model',
     'model_action_metadata',
     'model_ref',
     # Reference types
@@ -77,7 +82,9 @@ __all__ = [
     # Config
     'ModelConfigDict',
     # Message
+    'Document',
     'Message',
+    'Part',
     # Usage
     'get_basic_usage_stats',
 ]

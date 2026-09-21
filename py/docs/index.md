@@ -45,15 +45,7 @@
 
 ::: genkit.Part
 
-::: genkit.TextPart
-
-::: genkit.MediaPart
-
 ::: genkit.Media
-
-::: genkit.CustomPart
-
-::: genkit.ReasoningPart
 
 ::: genkit.Role
 
@@ -61,11 +53,7 @@
 
 ::: genkit.ToolRequest
 
-::: genkit.ToolRequestPart
-
 ::: genkit.ToolResponse
-
-::: genkit.ToolResponsePart
 
 ::: genkit.ToolDefinition
 
@@ -73,11 +61,9 @@
 
 ::: genkit.Document
 
-::: genkit.DocumentPart
-
 ::: genkit.EmbedderRef
 
-::: genkit.EmbedderOptions
+::: genkit.EmbedderInfo
 
 ::: genkit.Embedding
 
@@ -169,7 +155,7 @@
 
 ::: genkit.embedder.EmbedderSupports
 
-::: genkit.embedder.EmbedderOptions
+::: genkit.embedder.EmbedderInfo
 
 ## genkit.plugin_api
 

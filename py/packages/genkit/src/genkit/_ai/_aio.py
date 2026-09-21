@@ -34,16 +34,8 @@ import anyio
 import uvicorn
 from pydantic import BaseModel
 
-from genkit._ai._agents._base import (
-    Agent,
-    define_agent,
-    define_custom_agent,
-    define_prompt_agent,
-)
-from genkit._ai._agents._runtime import AgentFn
-from genkit._ai._agents._session import SessionStore, StateT, get_current_session
-from genkit._ai._agents._types import ChunkTransform, StateTransform
-from genkit._ai._embedding import EmbedderFn, EmbedderOptions, EmbedderRef, define_embedder
+from genkit._ai._agents._session import get_current_session
+from genkit._ai._embedding import EmbedderFn, EmbedderInfo, EmbedderRef, define_embedder
 from genkit._ai._evaluator import (
     BatchEvaluatorFn,
     EvaluatorFn,
@@ -65,8 +57,9 @@ from genkit._ai._model import (
     ModelFn,
     ModelResponse,
     ModelResponseChunk,
+    assert_correct_config_class,
     define_model,
-    resolve_call_model,
+    resolve_for_generate,
 )
 from genkit._ai._prompt import (
     ExecutablePrompt,
@@ -112,7 +105,7 @@ from genkit._core._middleware import (
     GenerateMiddleware,
     _validate_middleware_key_segment,
 )
-from genkit._core._model import Document, ModelConfigDict, ModelRef, ModelRefConfigT
+from genkit._core._model import Document, EmbedRequest, ModelConfigDict, ModelRef, ModelRefConfigT, Part
 from genkit._core._plugin import Plugin
 from genkit._core._protocols import SessionLike
 from genkit._core._reflection import ReflectionServer, ServerSpec, create_reflection_asgi_app
@@ -121,16 +114,12 @@ from genkit._core._registry import Registry
 from genkit._core._typing import (
     BaseDataPoint,
     Embedding,
-    EmbedRequest,
     EvalRequest,
     EvalResponse,
     MiddlewareRef,
     ModelInfo,
     Operation,
-    Part,
     ToolChoice,
-    ToolRequestPart,
-    ToolResponsePart,
 )
 
 from ._decorators import _FlowDecorator, _FlowDecoratorWithChunk
@@ -151,7 +140,7 @@ MiddlewareT = TypeVar('MiddlewareT', bound=BaseMiddleware)
 class Genkit:
     """The main entry point for building AI-powered applications.
 
-    Registers plugins, defines flows, tools, and agents, and runs generation.
+    Registers plugins, defines flows and tools, and runs generation.
 
     Example:
         from genkit import Genkit
@@ -304,8 +293,16 @@ class Genkit:
             metadata=metadata,
         )
 
-    def tool(self, name: str | None = None, description: str | None = None) -> Callable[[Callable[..., Any]], Tool]:
+    def tool(
+        self,
+        name: str | None = None,
+        description: str | None = None,
+        *,
+        input_schema: type[BaseModel] | dict[str, object] | None = None,
+    ) -> Callable[[Callable[..., Any]], Tool]:
         """Decorator to register a function as a tool.
+
+        The return annotation is what the model binds as ``outputSchema``.
 
         Example:
             @ai.tool()
@@ -316,7 +313,13 @@ class Genkit:
         """
 
         def wrapper(func: Callable[..., Any]) -> Tool:
-            return define_tool(self.registry, func, name, description)
+            return define_tool(
+                self.registry,
+                func,
+                name,
+                description,
+                input_schema=input_schema,
+            )
 
         return wrapper
 
@@ -472,12 +475,12 @@ class Genkit:
         self,
         name: str,
         fn: EmbedderFn,
-        options: EmbedderOptions | None = None,
+        info: EmbedderInfo | None = None,
         metadata: dict[str, object] | None = None,
         description: str | None = None,
     ) -> Action:
         """Register a custom embedder action."""
-        return define_embedder(self.registry, name, fn, options, metadata, description)
+        return define_embedder(self.registry, name, fn, info, metadata, description)
 
     def define_format(self, format: FormatDef) -> None:
         """Register a custom output format."""
@@ -824,176 +827,6 @@ class Genkit:
             output_schema=output_schema,
         )
 
-    async def agent(self, name: str) -> Agent:
-        """Look up a registered agent by name."""
-        resolved = await self.registry.resolve_action(ActionKind.AGENT, name)
-        if resolved is None:
-            raise GenkitError(
-                status='NOT_FOUND',
-                message=f"Agent '{name}' not found in registry.",
-            )
-        if not isinstance(resolved, Agent):
-            raise GenkitError(
-                status='INTERNAL',
-                message=f"Registry entry '{name}' is not an Agent.",
-            )
-        return resolved
-
-    def define_custom_agent(
-        self,
-        name: str,
-        fn: AgentFn,
-        *,
-        store: SessionStore[StateT] | None = None,
-        state_transform: StateTransform | None = None,
-        chunk_transform: ChunkTransform | None = None,
-        state_schema: type[StateT] | None = None,
-        description: str | None = None,
-        metadata: dict[str, object] | None = None,
-    ) -> Agent[StateT]:
-        """Define and register an agent with full control over the turn loop.
-
-        fn receives (SessionRunner, ActionRunContext) and must call sess.run(handle_turn)
-        to process inputs, then return an AgentResult.
-
-        Pass ``state_schema`` (a Pydantic model) to type the custom state, so the
-        chat's ``state``, ``response.state``, and streamed ``chunk.custom`` come
-        back as that model instead of a dict.
-        """
-        return define_custom_agent(
-            registry=self.registry,
-            name=name,
-            fn=fn,
-            store=store,
-            state_transform=state_transform,
-            chunk_transform=chunk_transform,
-            state_schema=state_schema,
-            description=description,
-            metadata=metadata,
-        )
-
-    @overload
-    def define_agent(
-        self,
-        name: str,
-        *,
-        model: ModelRef[ModelRefConfigT] | str | None = None,
-        system: str | list[Part] | None = None,
-        tools: Sequence[str | Tool] | None = None,
-        use: Sequence[BaseMiddleware | MiddlewareRef] | None = None,
-        config: ModelConfigDict,
-        max_turns: int | None = None,
-        description: str | None = None,
-        metadata: dict[str, object] | None = None,
-        store: SessionStore[StateT] | None = None,
-        state_transform: StateTransform | None = None,
-        chunk_transform: ChunkTransform | None = None,
-        state_schema: type[StateT] | None = None,
-    ) -> Agent[StateT]: ...
-
-    @overload
-    def define_agent(
-        self,
-        name: str,
-        *,
-        model: ModelRef[ModelRefConfigT] | str | None = None,
-        system: str | list[Part] | None = None,
-        tools: Sequence[str | Tool] | None = None,
-        use: Sequence[BaseMiddleware | MiddlewareRef] | None = None,
-        config: ModelRefConfigT | Mapping[str, Any] | None = None,
-        max_turns: int | None = None,
-        description: str | None = None,
-        metadata: dict[str, object] | None = None,
-        store: SessionStore[StateT] | None = None,
-        state_transform: StateTransform | None = None,
-        chunk_transform: ChunkTransform | None = None,
-        state_schema: type[StateT] | None = None,
-    ) -> Agent[StateT]: ...
-
-    def define_agent(
-        self,
-        name: str,
-        *,
-        model: ModelRef[ModelRefConfigT] | str | None = None,
-        system: str | list[Part] | None = None,
-        tools: Sequence[str | Tool] | None = None,
-        use: Sequence[BaseMiddleware | MiddlewareRef] | None = None,
-        config: BaseModel | ModelConfigDict | Mapping[str, Any] | None = None,
-        max_turns: int | None = None,
-        description: str | None = None,
-        metadata: dict[str, object] | None = None,
-        store: SessionStore[StateT] | None = None,
-        state_transform: StateTransform | None = None,
-        chunk_transform: ChunkTransform | None = None,
-        state_schema: type[StateT] | None = None,
-    ) -> Agent[StateT]:
-        """Define a prompt-backed agent.
-
-        Each turn: attaches session history, calls generate with streaming,
-        updates session. Pass resume in AgentInput to resume from an interrupt.
-
-        Pass ``state_schema`` (a Pydantic model) to type the custom state tools
-        read and write — the chat's ``state``, ``response.state``, and streamed
-        ``chunk.custom`` come back as that model instead of a dict.
-
-        Example:
-            from genkit.agent import InMemorySessionStore
-            from genkit_google_genai import GoogleAI
-
-            agent = ai.define_agent(
-                name='weatherAgent',
-                model=GoogleAI.gemini_model('gemini-flash-latest'),
-                system='Weather assistant.',
-                tools=[current_weather],
-                store=InMemorySessionStore(),
-            )
-            chat = agent.chat()
-            res = await chat.send('Weather in Paris?')
-        """
-        return define_agent(
-            registry=self.registry,
-            name=name,
-            model=model,
-            system=system,
-            tools=tools,
-            use=use,
-            config=config,
-            max_turns=max_turns,
-            description=description,
-            metadata=metadata,
-            store=store,
-            state_transform=state_transform,
-            chunk_transform=chunk_transform,
-            state_schema=state_schema,
-        )
-
-    def define_prompt_agent(
-        self,
-        name: str,
-        *,
-        store: SessionStore[StateT] | None = None,
-        state_transform: StateTransform | None = None,
-        chunk_transform: ChunkTransform | None = None,
-        state_schema: type[StateT] | None = None,
-        description: str | None = None,
-        metadata: dict[str, object] | None = None,
-    ) -> Agent[StateT]:
-        """Wire an already-registered prompt as an agent.
-
-        Looks up the prompt named `name` from the registry. Use when the prompt
-        is defined via ai.define_prompt() or loaded from a .prompt file.
-        """
-        return define_prompt_agent(
-            registry=self.registry,
-            name=name,
-            store=store,
-            state_transform=state_transform,
-            chunk_transform=chunk_transform,
-            state_schema=state_schema,
-            description=description,
-            metadata=metadata,
-        )
-
     def define_resource(
         self,
         *,
@@ -1179,8 +1012,8 @@ class Genkit:
         tools: Sequence[str | Tool] | None = None,
         return_tool_requests: bool | None = None,
         tool_choice: ToolChoice | None = None,
-        resume_respond: ToolResponsePart | list[ToolResponsePart] | None = None,
-        resume_restart: ToolRequestPart | list[ToolRequestPart] | None = None,
+        resume_respond: Part | list[Part] | None = None,
+        resume_restart: Part | list[Part] | None = None,
         resume_metadata: dict[str, Any] | None = None,
         config: ModelConfigDict,
         max_turns: int | None = None,
@@ -1206,8 +1039,8 @@ class Genkit:
         tools: Sequence[str | Tool] | None = None,
         return_tool_requests: bool | None = None,
         tool_choice: ToolChoice | None = None,
-        resume_respond: ToolResponsePart | list[ToolResponsePart] | None = None,
-        resume_restart: ToolRequestPart | list[ToolRequestPart] | None = None,
+        resume_respond: Part | list[Part] | None = None,
+        resume_restart: Part | list[Part] | None = None,
         resume_metadata: dict[str, Any] | None = None,
         config: ModelRefConfigT | Mapping[str, Any] | None = None,
         max_turns: int | None = None,
@@ -1233,8 +1066,8 @@ class Genkit:
         tools: Sequence[str | Tool] | None = None,
         return_tool_requests: bool | None = None,
         tool_choice: ToolChoice | None = None,
-        resume_respond: ToolResponsePart | list[ToolResponsePart] | None = None,
-        resume_restart: ToolRequestPart | list[ToolRequestPart] | None = None,
+        resume_respond: Part | list[Part] | None = None,
+        resume_restart: Part | list[Part] | None = None,
         resume_metadata: dict[str, Any] | None = None,
         config: ModelConfigDict,
         max_turns: int | None = None,
@@ -1260,8 +1093,8 @@ class Genkit:
         tools: Sequence[str | Tool] | None = None,
         return_tool_requests: bool | None = None,
         tool_choice: ToolChoice | None = None,
-        resume_respond: ToolResponsePart | list[ToolResponsePart] | None = None,
-        resume_restart: ToolRequestPart | list[ToolRequestPart] | None = None,
+        resume_respond: Part | list[Part] | None = None,
+        resume_restart: Part | list[Part] | None = None,
         resume_metadata: dict[str, Any] | None = None,
         config: ModelRefConfigT | Mapping[str, Any] | None = None,
         max_turns: int | None = None,
@@ -1285,8 +1118,8 @@ class Genkit:
         tools: Sequence[str | Tool] | None = None,
         return_tool_requests: bool | None = None,
         tool_choice: ToolChoice | None = None,
-        resume_respond: ToolResponsePart | list[ToolResponsePart] | None = None,
-        resume_restart: ToolRequestPart | list[ToolRequestPart] | None = None,
+        resume_respond: Part | list[Part] | None = None,
+        resume_restart: Part | list[Part] | None = None,
         resume_metadata: dict[str, Any] | None = None,
         config: BaseModel | ModelConfigDict | Mapping[str, Any] | None = None,
         max_turns: int | None = None,
@@ -1325,7 +1158,8 @@ class Genkit:
         child_registry = self.registry.new_child()
         await register_tools(child_registry, tools)
         refs = register_middleware(child_registry, use)
-        resolved = resolve_call_model(model=model, config=config, registry=child_registry)
+        resolved = await resolve_for_generate(model=model, config=config, registry=child_registry)
+        assert_correct_config_class(config=config, schema=resolved.config_schema, model=resolved.name)
         prompt_config = PromptConfig(
             model=resolved.name,
             prompt=prompt,
@@ -1351,7 +1185,7 @@ class Genkit:
         return await generate_action(
             child_registry,
             gen_options,
-            context=context if context else get_current_context(),
+            context=context if context is not None else get_current_context(),
         )
 
     # Overload: config=ModelConfigDict, output_schema=type[T] -> ModelStreamResponse[T]
@@ -1366,8 +1200,8 @@ class Genkit:
         tools: Sequence[str | Tool] | None = None,
         return_tool_requests: bool | None = None,
         tool_choice: ToolChoice | None = None,
-        resume_respond: ToolResponsePart | list[ToolResponsePart] | None = None,
-        resume_restart: ToolRequestPart | list[ToolRequestPart] | None = None,
+        resume_respond: Part | list[Part] | None = None,
+        resume_restart: Part | list[Part] | None = None,
         resume_metadata: dict[str, Any] | None = None,
         config: ModelConfigDict,
         max_turns: int | None = None,
@@ -1394,8 +1228,8 @@ class Genkit:
         tools: Sequence[str | Tool] | None = None,
         return_tool_requests: bool | None = None,
         tool_choice: ToolChoice | None = None,
-        resume_respond: ToolResponsePart | list[ToolResponsePart] | None = None,
-        resume_restart: ToolRequestPart | list[ToolRequestPart] | None = None,
+        resume_respond: Part | list[Part] | None = None,
+        resume_restart: Part | list[Part] | None = None,
         resume_metadata: dict[str, Any] | None = None,
         config: ModelRefConfigT | Mapping[str, Any] | None = None,
         max_turns: int | None = None,
@@ -1422,8 +1256,8 @@ class Genkit:
         tools: Sequence[str | Tool] | None = None,
         return_tool_requests: bool | None = None,
         tool_choice: ToolChoice | None = None,
-        resume_respond: ToolResponsePart | list[ToolResponsePart] | None = None,
-        resume_restart: ToolRequestPart | list[ToolRequestPart] | None = None,
+        resume_respond: Part | list[Part] | None = None,
+        resume_restart: Part | list[Part] | None = None,
         resume_metadata: dict[str, Any] | None = None,
         config: ModelConfigDict,
         max_turns: int | None = None,
@@ -1450,8 +1284,8 @@ class Genkit:
         tools: Sequence[str | Tool] | None = None,
         return_tool_requests: bool | None = None,
         tool_choice: ToolChoice | None = None,
-        resume_respond: ToolResponsePart | list[ToolResponsePart] | None = None,
-        resume_restart: ToolRequestPart | list[ToolRequestPart] | None = None,
+        resume_respond: Part | list[Part] | None = None,
+        resume_restart: Part | list[Part] | None = None,
         resume_metadata: dict[str, Any] | None = None,
         config: ModelRefConfigT | Mapping[str, Any] | None = None,
         max_turns: int | None = None,
@@ -1476,8 +1310,8 @@ class Genkit:
         tools: Sequence[str | Tool] | None = None,
         return_tool_requests: bool | None = None,
         tool_choice: ToolChoice | None = None,
-        resume_respond: ToolResponsePart | list[ToolResponsePart] | None = None,
-        resume_restart: ToolRequestPart | list[ToolRequestPart] | None = None,
+        resume_respond: Part | list[Part] | None = None,
+        resume_restart: Part | list[Part] | None = None,
         resume_metadata: dict[str, Any] | None = None,
         config: BaseModel | ModelConfigDict | Mapping[str, Any] | None = None,
         max_turns: int | None = None,
@@ -1493,6 +1327,11 @@ class Genkit:
     ) -> ModelStreamResponse[Any]:
         """Stream generated text, returning a ModelStreamResponse with .stream and .response.
 
+        With ``output_schema=Recipe``, each ``chunk.output`` is a partial of
+        that type: same attributes, any field may still be ``None`` or a
+        prefix. Guard the field you are about to use. The finished
+        ``Recipe`` is only ``(await sr.response).output``.
+
         Example:
             stream = ai.generate_stream(prompt='Write a haiku about rain.')
             async for chunk in stream.stream:
@@ -1507,7 +1346,8 @@ class Genkit:
             child_registry = self.registry.new_child()
             await register_tools(child_registry, tools)
             refs = register_middleware(child_registry, use)
-            resolved = resolve_call_model(model=model, config=config, registry=child_registry)
+            resolved = await resolve_for_generate(model=model, config=config, registry=child_registry)
+            assert_correct_config_class(config=config, schema=resolved.config_schema, model=resolved.name)
             prompt_config = PromptConfig(
                 model=resolved.name,
                 prompt=prompt,
@@ -1534,7 +1374,7 @@ class Genkit:
                 child_registry,
                 gen_options,
                 on_chunk=lambda c: channel.send(c),
-                context=context if context else get_current_context(),
+                context=context if context is not None else get_current_context(),
             )
 
         response_future: asyncio.Future[ModelResponse[Any]] = asyncio.create_task(_run_generate())
@@ -1585,7 +1425,7 @@ class Genkit:
         response = (
             await embed_action.run(
                 EmbedRequest(
-                    input=documents,  # pyright: ignore[reportArgumentType]
+                    input=documents,
                     options=final_options,
                 )
             )
@@ -1696,13 +1536,33 @@ class Genkit:
 
         return await run_in_new_span(name, body, action_type='flowStep', metadata=metadata)
 
-    async def check_operation(self, operation: Operation) -> Operation:
-        """Check the status of a long-running background operation."""
-        return await check_operation(self.registry, operation)
+    async def check_operation(
+        self,
+        operation: Operation,
+        *,
+        context: dict[str, Any] | None = None,
+        config: Mapping[str, Any] | None = None,
+    ) -> Operation:
+        """Poll a background job.
 
-    async def cancel_operation(self, operation: Operation) -> Operation:
-        """Cancel a long-running background operation."""
-        return await cancel_operation(self.registry, operation)
+        Pass ``context={'secrets': {'api_key': ...}}`` again when start used a
+        per-request key. ``config`` is client knobs (``base_url``,
+        ``location``, ``api_version``), not video settings.
+        """
+        return await check_operation(self.registry, operation, context=context, config=config)
+
+    async def cancel_operation(
+        self,
+        operation: Operation,
+        *,
+        context: dict[str, Any] | None = None,
+        config: Mapping[str, Any] | None = None,
+    ) -> Operation:
+        """Cancel a background job.
+
+        Same ``context`` / ``config`` pockets as ``check_operation``.
+        """
+        return await cancel_operation(self.registry, operation, context=context, config=config)
 
     @overload
     async def generate_operation(
@@ -1781,12 +1641,13 @@ class Genkit:
             while not op.done:
                 op = await ai.check_operation(op)
         """
-        resolved = resolve_call_model(
+        resolved = await resolve_for_generate(
             model=model,
             config=config,
             registry=self.registry,
             message='No model specified for generate_operation.',
         )
+        assert_correct_config_class(config=config, schema=resolved.config_schema, model=resolved.name)
 
         model_action = await self.registry.resolve_model(resolved.name)
         if not model_action:

@@ -23,20 +23,16 @@ import re
 from collections.abc import Callable
 from typing import Any, NoReturn
 
-from openai import APIStatusError
+from openai import APIStatusError, BaseModel
+from openai.types.chat import ChatCompletion, ChatCompletionChunk
 
 from genkit import (
     GenkitError,
-    MediaPart,
     Message,
     ModelRequest,
     Part,
-    ReasoningPart,
     Role,
-    TextPart,
     ToolRequest,
-    ToolRequestPart,
-    ToolResponsePart,
 )
 from genkit.plugin_api import wrap_http_error
 
@@ -93,7 +89,7 @@ def _find_text(request: ModelRequest) -> str | None:
         return None
 
     return next(
-        (part.root.text for part in request.messages[0].content if isinstance(part.root, TextPart) and part.root.text),
+        (part.text for part in request.messages[0].content if part.text is not None and part.text),
         None,
     )
 
@@ -202,10 +198,64 @@ def extract_config_dict(request: ModelRequest) -> dict[str, Any]:
     return {}
 
 
+def _unmodeled_field(source: BaseModel, name: str) -> object:
+    """Read a response field the OpenAI schema does not model.
+
+    The SDK's response models allow extra fields and collect them in
+    ``model_extra``, which is where a provider's non-standard fields land.
+
+    Args:
+        source: A response object from the OpenAI SDK.
+        name: The wire name of the field.
+
+    Returns:
+        The field value, or None when it is absent or arrived as null.
+    """
+    extras = source.model_extra
+    if not isinstance(extras, dict):
+        return None
+    return extras.get(name)
+
+
+def extract_response_metadata(response: ChatCompletion | ChatCompletionChunk) -> dict[str, Any]:
+    """Collect the response metadata that is not part of the generated message.
+
+    Accepts a chat completion or a single streamed chunk of one: both carry
+    the same metadata fields.
+
+    Args:
+        response: A ``ChatCompletion`` or ``ChatCompletionChunk``.
+
+    Returns:
+        A dict of the metadata fields the response actually carries, empty
+        when it carries none.
+    """
+    metadata: dict[str, Any] = {}
+    for key, value in (
+        ('systemFingerprint', response.system_fingerprint),
+        ('model', response.model),
+        ('id', response.id),
+    ):
+        if isinstance(value, str) and value:
+            metadata[key] = value
+
+    # xAI returns live-search sources in an unmodeled citations field.
+    citations = _unmodeled_field(response, 'citations')
+    if citations is not None:
+        metadata['citations'] = citations
+
+    # A gateway reports a mid-generation upstream failure as an error object on the choice.
+    failure = _unmodeled_field(response.choices[0], 'error') if response.choices else None
+    if isinstance(failure, dict):
+        metadata['error'] = failure
+
+    return metadata
+
+
 def _extract_media(request: ModelRequest) -> tuple[str, str]:
     """Extract media content from the first message.
 
-    Finds the first part with a MediaPart root and returns its URL and
+    Finds the first part with media and returns its URL and
     content type. If the content type is missing, attempts to parse it
     from a data URI.
 
@@ -222,7 +272,7 @@ def _extract_media(request: ModelRequest) -> tuple[str, str]:
         raise ValueError('No messages found in the request')
 
     part_with_media = next(
-        (p for p in request.messages[0].content if isinstance(p.root, MediaPart) and p.root.media),
+        (p for p in request.messages[0].content if p.media is not None and p.media),
         None,
     )
 
@@ -230,8 +280,8 @@ def _extract_media(request: ModelRequest) -> tuple[str, str]:
         raise ValueError('No media content found in the first message')
 
     # Re-assert to help type checkers narrow through the generator boundary.
-    assert isinstance(part_with_media.root, MediaPart)
-    media = part_with_media.root.media
+    assert part_with_media.media is not None
+    media = part_with_media.media
     content_type = media.content_type or ''
     url = media.url
     if not content_type and url.startswith('data:'):
@@ -344,6 +394,18 @@ class MessageAdapter:
         except AttributeError:
             return None
 
+    @property
+    def refusal(self) -> str | None:
+        """The 'refusal' attribute of the message if available.
+
+        A model that declines to answer sends the reason it declined here
+        rather than as content.
+
+        Returns:
+            The refusal string or None.
+        """
+        return getattr(self._data, 'refusal', None)
+
 
 ChatCompletionMessageAdapter = DictMessageAdapter | MessageAdapter
 
@@ -368,10 +430,10 @@ class MessageConverter:
     def to_openai(cls, message: Message) -> list[dict]:
         """Converts an internal `Message` object to OpenAI-compatible chat messages.
 
-        Handles TextPart, MediaPart (images), ToolRequestPart, and
-        ToolResponsePart. When a message contains MediaPart content, the
-        ``content`` field uses the array-of-content-blocks format required
-        by the OpenAI Chat Completions API for multimodal requests.
+        Handles text, media (images), tool requests, and tool responses.
+        When a message contains media, the ``content`` field uses the
+        array-of-content-blocks format required by the OpenAI Chat
+        Completions API for multimodal requests.
 
         Matches the JS canonical implementation in ``toOpenAIMessages()``.
 
@@ -387,37 +449,34 @@ class MessageConverter:
         has_media = False
 
         for part in message.content:
-            root = part.root
-
-            # Skip ReasoningPart — reasoning_content must not be sent back
-            # in multi-turn context. DeepSeek's API rejects it, and the JS
-            # canonical implementation naturally excludes it by using msg.text
-            # (which only returns text parts) for assistant messages.
-            if isinstance(root, ReasoningPart):
+            # Reasoning must not be sent back in multi-turn context.
+            # DeepSeek's API rejects it, and assistant messages only
+            # replay text to the model.
+            if part.reasoning is not None:
                 continue
 
-            if isinstance(root, TextPart):
-                content_parts.append({'type': 'text', 'text': root.text})
+            if part.text is not None:
+                content_parts.append({'type': 'text', 'text': part.text})
 
-            elif isinstance(root, MediaPart):
+            elif part.media is not None:
                 has_media = True
                 content_parts.append({
                     'type': 'image_url',
-                    'image_url': {'url': root.media.url},
+                    'image_url': {'url': part.media.url},
                 })
 
-            elif isinstance(root, ToolRequestPart):
+            elif part.tool_request is not None:
                 tool_calls.append({
-                    'id': root.tool_request.ref,
+                    'id': part.tool_request.ref,
                     'type': 'function',
                     'function': {
-                        'name': root.tool_request.name,
-                        'arguments': json.dumps(root.tool_request.input),
+                        'name': part.tool_request.name,
+                        'arguments': json.dumps(part.tool_request.input),
                     },
                 })
 
-            elif isinstance(root, ToolResponsePart):
-                tool_call = root.tool_response
+            elif part.tool_response is not None:
+                tool_call = part.tool_response
                 tool_messages.append({
                     'role': cls._get_openai_role(message.role),
                     'tool_call_id': tool_call.ref,
@@ -453,35 +512,27 @@ class MessageConverter:
     def to_genkit(cls, message: ChatCompletionMessageAdapter) -> Message:
         """Converts an OpenAI-style message into a Genkit `Message` object.
 
-        Handles tool calls, reasoning content (from DeepSeek R1 / reasoner),
-        and regular text content. Matches the JS canonical implementation
-        in fromOpenAIChoice().
+        Emits a reasoning part, a text part, and one tool request part per
+        tool call, in that order, for whichever of them the message carries.
 
         Args:
             message: A ChatCompletionMessageAdapter instance.
 
         Returns:
-            A Genkit `Message` object.
-
-        Raises:
-            ValueError: If neither content, tool_calls, nor reasoning_content
-                are present in the message.
+            A Genkit `Message` object, with empty content when the message
+            carries no content, tool calls, or reasoning.
         """
         content: list[Part] = []
 
-        if message.tool_calls:
-            content = [cls.tool_call_to_genkit(tool_call, args_parser=json.loads) for tool_call in message.tool_calls]
-        else:
-            # Reasoning content comes before regular content (matching JS order).
-            reasoning = message.reasoning_content
-            if reasoning:
-                content.append(Part(root=ReasoningPart(reasoning=reasoning)))
+        reasoning = message.reasoning_content
+        if reasoning:
+            content.append(Part.from_reasoning(reasoning))
 
-            if message.content:
-                content.append(cls.text_part_to_genkit(message.content))
+        if message.content:
+            content.append(cls.text_part_to_genkit(message.content))
 
-        if not content:
-            raise ValueError('Unable to determine content part')
+        for tool_call in message.tool_calls or []:
+            content.append(cls.tool_call_to_genkit(tool_call, args_parser=json.loads))
 
         role = message.role or Role.MODEL
         return Message(role=cls._genkit_role_map.get(role, role), content=content)
@@ -496,7 +547,7 @@ class MessageConverter:
         Returns:
             A `Part` instance containing the text.
         """
-        return Part(root=TextPart(text=content))
+        return Part.from_text(content)
 
     @classmethod
     def tool_call_to_genkit(
@@ -529,14 +580,12 @@ class MessageConverter:
         default_args = str(func_args) if func_args else ''
         args_input: str | dict[str, Any] | None = args_segment if args_segment is not None else default_args
         if args_parser and isinstance(args_input, str):
-            args_input = args_parser(args_input)
+            args_input = args_parser(args_input) if args_input else {}
 
         return Part(
-            root=ToolRequestPart(
-                tool_request=ToolRequest(
-                    ref=str(tool_id) if tool_id else None,
-                    name=str(func_name) if func_name else '',
-                    input=args_input,
-                )
+            tool_request=ToolRequest(
+                ref=str(tool_id) if tool_id else None,
+                name=str(func_name) if func_name else '',
+                input=args_input,
             )
         )

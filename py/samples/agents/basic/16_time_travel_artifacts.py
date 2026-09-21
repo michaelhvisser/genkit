@@ -32,8 +32,8 @@ from __future__ import annotations
 from genkit_google_genai import GoogleAI
 from genkit_middleware import Artifacts, Middleware
 
-from genkit import Genkit
-from genkit.agent import InMemorySessionStore
+from genkit.exp import Genkit
+from genkit.exp.agent import InMemorySessionStore
 
 ai = Genkit(plugins=[GoogleAI(), Middleware()])
 
@@ -54,7 +54,7 @@ def page(chat) -> str:
     """The landing.md the agent is maintaining in this timeline."""
     for art in chat.artifacts:
         if art.name == 'landing.md':
-            return ''.join(getattr(getattr(p, 'root', p), 'text', '') for p in art.parts).strip()
+            return ''.join((p.text or '') for p in art.parts).strip()
     return ''
 
 

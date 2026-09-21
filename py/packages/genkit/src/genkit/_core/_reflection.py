@@ -42,9 +42,8 @@ from genkit._core._direct_http_instrumentation import connect_developer_ui_colle
 from genkit._core._error import get_reflection_json
 from genkit._core._logger import get_logger
 from genkit._core._middleware import GenerateMiddleware
-from genkit._core._model import ModelRef
+from genkit._core._model import AgentInit, AgentInput, ModelRef
 from genkit._core._registry import Registry
-from genkit._core._typing import AgentInit, AgentInput
 
 logger = get_logger(__name__)
 

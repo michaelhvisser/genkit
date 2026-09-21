@@ -23,7 +23,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from genkit_openai.models import OpenAIModel
 
-from genkit import ModelRequest, ModelResponseChunk, TextPart, ToolRequestPart
+from genkit import ModelRequest, ModelResponseChunk
 
 
 @pytest.mark.asyncio
@@ -40,6 +40,7 @@ async def test_generate_with_tool_calls_executes_tools(sample_request: ModelRequ
     first_message.tool_calls = [mock_tool_call]
     first_message.content = None
     first_message.reasoning_content = None
+    first_message.refusal = None
 
     first_response = MagicMock()
     first_response.choices = [MagicMock(finish_reason='tool_calls', message=first_message)]
@@ -51,6 +52,7 @@ async def test_generate_with_tool_calls_executes_tools(sample_request: ModelRequ
     second_message.tool_calls = None
     second_message.content = 'final response'
     second_message.reasoning_content = None
+    second_message.refusal = None
 
     second_response = MagicMock()
     second_response.choices = [MagicMock(finish_reason='stop', message=second_message)]
@@ -69,9 +71,9 @@ async def test_generate_with_tool_calls_executes_tools(sample_request: ModelRequ
     response = await model._generate(sample_request)
 
     assert response.message is not None
-    part = response.message.content[0].root
+    part = response.message.content[0]
 
-    assert isinstance(part, ToolRequestPart)
+    assert part.tool_request is not None
     assert part.tool_request.input == {'a': 1}
     assert part.tool_request.name == 'tool_fn'
     assert part.tool_request.ref == 'tool123'
@@ -79,9 +81,9 @@ async def test_generate_with_tool_calls_executes_tools(sample_request: ModelRequ
     response = await model._generate(sample_request)
 
     assert response.message is not None
-    part = response.message.content[0].root
+    part = response.message.content[0]
 
-    assert isinstance(part, TextPart)
+    assert part.text is not None
     assert part.text == 'final response'
 
     assert mock_client.chat.completions.create.call_count == 2
@@ -118,6 +120,7 @@ async def test_generate_stream_with_tool_calls(sample_request: ModelRequest) -> 
             delta_mock.role = None
             delta_mock.tool_calls = [MockToolCall(id, index, name, args_chunk)]
             delta_mock.reasoning_content = None
+            delta_mock.refusal = None
 
             choice_mock = MagicMock()
             choice_mock.delta = delta_mock
@@ -140,15 +143,14 @@ async def test_generate_stream_with_tool_calls(sample_request: ModelRequest) -> 
     collected_chunks = []
 
     def callback(chunk: ModelResponseChunk) -> None:
-        collected_chunks.append(chunk.content[0].root)
+        collected_chunks.append(chunk.content[0])
 
     await model._generate_stream(sample_request, callback)
 
     assert len(collected_chunks) == 3
-    assert all(isinstance(part, ToolRequestPart) for part in collected_chunks)
+    assert all(part.tool_request is not None for part in collected_chunks)
 
     tool_part = collected_chunks[0]
-    assert isinstance(tool_part, ToolRequestPart)
     assert tool_part.tool_request is not None
     tool_request = tool_part.tool_request
     assert tool_request.name == 'tool_fn'

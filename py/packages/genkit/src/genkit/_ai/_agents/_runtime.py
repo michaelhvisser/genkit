@@ -47,24 +47,28 @@ from genkit._core._channel import CloseableQueue, QueueShutDown
 from genkit._core._error import GenkitError
 from genkit._core._instrumentation import SpanContext, run_in_new_span
 from genkit._core._logger import get_logger
-from genkit._core._model import GenerateActionOptions, Message, ModelResponse, ModelResponseChunk
-from genkit._core._registry import Registry
-from genkit._core._typing import (
-    AgentFinishReason,
+from genkit._core._model import (
     AgentInit,
     AgentInput,
     AgentOutput,
     AgentResult,
     AgentStreamChunk,
     Artifact,
+    GenerateActionOptions,
+    Message,
+    ModelResponse,
+    ModelResponseChunk,
+    SessionSnapshot,
+    SessionState,
+)
+from genkit._core._registry import Registry
+from genkit._core._typing import (
+    AgentFinishReason,
     FinishReason,
     GenkitRuntimeError,
     JsonPatch,
     JsonPatchOp,
     JsonPatchOperation,
-    MessageData,
-    SessionSnapshot,
-    SessionState,
     SnapshotStatus,
     TurnEnd,
 )
@@ -216,13 +220,13 @@ class SessionRunner(Generic[StateT]):
 
     # --- Session passthrough helpers ---
 
-    async def get_messages(self) -> list[MessageData]:
+    async def get_messages(self) -> list[Message]:
         return await self.session.get_messages()
 
-    async def set_messages(self, messages: list[MessageData]) -> None:
+    async def set_messages(self, messages: list[Message]) -> None:
         await self.session.set_messages(messages)
 
-    async def add_messages(self, messages: list[MessageData]) -> None:
+    async def add_messages(self, messages: list[Message]) -> None:
         await self.session.add_messages(messages)
 
     async def get_artifacts(self) -> list[Artifact]:
@@ -1030,7 +1034,7 @@ async def generate_prompt_agent_turn(
     ctx: ActionRunContext,
     registry: Registry,
     gen_options: GenerateActionOptions,
-    history: list[MessageData],
+    history: list[Message],
 ) -> TurnResult | None:
     """Run generate for one agent turn and persist session messages."""
 
@@ -1094,12 +1098,12 @@ def to_agent_finish_reason(fr: FinishReason) -> AgentFinishReason:
 async def persist_turn_messages(
     *,
     session_runner: SessionRunner,
-    history: list[MessageData],
-    response_message: MessageData | Message | None,
+    history: list[Message],
+    response_message: Message | None,
     response: ModelResponse | None = None,
 ) -> None:
     if response is not None and response.request is not None and response.request.messages:
-        clean: list[MessageData] = []
+        clean: list[Message] = []
         for m in response.request.messages:
             meta = m.metadata or {}
             if meta.get(PREAMBLE_KEY):
@@ -1113,7 +1117,7 @@ async def persist_turn_messages(
     if response_message is None:
         return
 
-    clean_history: list[MessageData] = [coerce_message(m) for m in history]
+    clean_history: list[Message] = [coerce_message(m) for m in history]
     clean_history = [m for m in clean_history if not (m.metadata or {}).get(PREAMBLE_KEY)]
     clean_history.append(coerce_message(response_message))
     await session_runner.set_messages(clean_history)

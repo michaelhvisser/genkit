@@ -31,7 +31,7 @@ from typing import Any
 from _ai import ai
 
 from genkit import ActionRunContext
-from genkit.agent import InMemorySessionStore
+from genkit.exp.agent import InMemorySessionStore
 
 # The store is what makes detach possible — the background turn writes its result
 # there under the snapshot id, and the client reads it back when it's ready.
@@ -59,7 +59,7 @@ async def test_background_agent(text: str, ctx: ActionRunContext) -> dict[str, A
     preview = ''
     if msgs:
         parts = msgs[-1].content or []
-        preview = ''.join(getattr(p.root, 'text', '') or '' for p in parts)[:200]
+        preview = ''.join((p.text or '') or '' for p in parts)[:200]
     return {'snapshot_id': task.snapshot_id, 'status': str(snapshot.status if snapshot else None), 'preview': preview}
 
 

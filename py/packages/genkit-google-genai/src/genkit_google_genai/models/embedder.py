@@ -28,9 +28,9 @@ else:
 from google import genai
 from google.genai import types as genai_types
 
-from genkit import DocumentPart, Embedding, EmbedRequest, EmbedResponse
-from genkit._core._typing import DocumentData, MediaPart, TextPart
-from genkit.embedder import EmbedderOptions, EmbedderSupports
+from genkit import Document, Embedding, EmbedRequest, EmbedResponse, Part
+from genkit._core._model import as_document
+from genkit.embedder import EmbedderInfo, EmbedderSupports
 from genkit_google_genai.models._routing import strip_ref_prefixes
 from genkit_google_genai.models.utils import PartConverter
 
@@ -72,7 +72,7 @@ class EmbeddingTaskType(StrEnum):
 # Static dimensions for known embedders. Keys are version-suffix free
 # (e.g. 'multimodalembedding', not 'multimodalembedding@001') because model
 # discovery returns the bare name on some accounts/regions; lookups strip the
-# '@version' suffix before matching (see get_embedder_options).
+# '@version' suffix before matching (see get_embedder_info).
 EMBEDDER_DIMENSIONS: dict[str, int] = {
     # Google AI
     'gemini-embedding-2-preview': 3072,
@@ -113,8 +113,8 @@ def _base_name(name: str) -> str:
     return name.split('@', 1)[0]
 
 
-def get_embedder_options(name: str, label: str, is_vertex: bool = False) -> EmbedderOptions:
-    """Return EmbedderOptions metadata for a discovered embedder model.
+def get_embedder_info(name: str, label: str, is_vertex: bool = False) -> EmbedderInfo:
+    """Return catalog info for a discovered embedder model.
 
     Args:
         name: The bare (unprefixed) model name, e.g. 'gemini-embedding-2'.
@@ -122,14 +122,14 @@ def get_embedder_options(name: str, label: str, is_vertex: bool = False) -> Embe
         is_vertex: True when resolving for the Vertex backend.
 
     Returns:
-        EmbedderOptions describing the model's label, supported inputs and
+        EmbedderInfo describing the model's label, supported inputs and
         static dimensions.
     """
     base = _base_name(name)
     supports_map = VERTEX_EMBEDDER_INPUT_SUPPORTS if is_vertex else GOOGLEAI_EMBEDDER_INPUT_SUPPORTS
     supports = supports_map.get(name) or supports_map.get(base) or ['text']
     dimensions = EMBEDDER_DIMENSIONS.get(name) or EMBEDDER_DIMENSIONS.get(base)
-    return EmbedderOptions(
+    return EmbedderInfo(
         label=label,
         supports=EmbedderSupports(input=supports),
         dimensions=dimensions,
@@ -258,7 +258,7 @@ class Embedder:
             embeddings.extend(self._prediction_to_embeddings(prediction))
         return EmbedResponse(embeddings=embeddings)
 
-    def _build_multimodal_instance(self, doc: DocumentData) -> dict[str, Any]:
+    def _build_multimodal_instance(self, doc: Document) -> dict[str, Any]:
         """Build a Vertex multimodal embedding instance from a Genkit document.
 
         A Vertex instance accepts at most one text, one image and one video
@@ -267,27 +267,25 @@ class Embedder:
         multiple videos raise, since the API would otherwise silently keep only
         the last of each.
         """
-        if not isinstance(doc, DocumentData):
-            doc = DocumentData.model_validate(doc)
+        doc = as_document(doc)
 
         instance: dict[str, Any] = {}
         text_parts: list[str] = []
         for p in doc.content:
-            part = p if isinstance(p, DocumentPart) else DocumentPart.model_validate(p)
-            root = part.root
-            if isinstance(root, TextPart):
-                if root.text:
-                    text_parts.append(root.text)
-            elif isinstance(root, MediaPart):
-                content_type = root.media.content_type or ''
+            part = p if isinstance(p, Part) else Part.model_validate(p)
+            if part.text is not None:
+                if part.text:
+                    text_parts.append(part.text)
+            elif part.media is not None:
+                content_type = part.media.content_type or ''
                 if content_type.startswith('image/'):
                     if 'image' in instance:
                         raise ValueError('Multimodal embed document cannot contain more than one image.')
-                    instance['image'] = self._media_reference(root.media.url, content_type)
+                    instance['image'] = self._media_reference(part.media.url, content_type)
                 elif content_type.startswith('video/'):
                     if 'video' in instance:
                         raise ValueError('Multimodal embed document cannot contain more than one video.')
-                    video = self._media_reference(root.media.url, content_type, include_mime_type=False)
+                    video = self._media_reference(part.media.url, content_type, include_mime_type=False)
                     segment_config = (doc.metadata or {}).get('video_segment_config') or (doc.metadata or {}).get(
                         'videoSegmentConfig'
                     )
@@ -371,11 +369,10 @@ class Embedder:
         """
         request_contents: list[genai.types.Content] = []
         for doc in request.input:
-            if not isinstance(doc, DocumentData):
-                doc = DocumentData.model_validate(doc)
+            doc = as_document(doc)
             content_parts: list[genai.types.Part] = []
             for p in doc.content:
-                part = p if isinstance(p, DocumentPart) else DocumentPart.model_validate(p)
+                part = p if isinstance(p, Part) else Part.model_validate(p)
                 converted = await PartConverter.to_gemini(part)
                 if isinstance(converted, list):
                     content_parts.extend(converted)
