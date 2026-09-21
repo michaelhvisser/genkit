@@ -25,6 +25,7 @@ import urllib.error
 import urllib.request
 from collections.abc import Mapping, Sequence
 from queue import Queue
+from typing import Any
 from urllib.parse import urljoin, urlparse
 
 from opentelemetry import trace as trace_api
@@ -96,11 +97,11 @@ def _ns_to_ms(ns: int | None) -> float:
     return ns / 1_000_000 if ns is not None else 0
 
 
-def _otel_event_attributes_to_json(attrs: object | None) -> dict[str, str | int | float | bool | None]:
+def _otel_event_attributes_to_json(attrs: object | None) -> dict[str, Any]:
     """Flatten OTel event attributes for JSON / Dev UI (expects string keys and JSON-safe values)."""
     if not isinstance(attrs, Mapping):
         return {}
-    out: dict[str, str | int | float | bool | None] = {}
+    out: dict[str, Any] = {}
     for k, v in attrs.items():
         key = str(k)
         if isinstance(v, (str, int, float, bool)) or v is None:
