@@ -41,6 +41,8 @@
 
 ::: genkit.MultipartToolResponse
 
+::: genkit.Flow
+
 ::: genkit.ActionRunContext
 
 ::: genkit.ExecutablePrompt
@@ -95,8 +97,6 @@
 
 ::: genkit.model.ModelConfig
 
-::: genkit.model.get_basic_usage_stats
-
 ## genkit.embedder
 
 ::: genkit.embedder.EmbedRequest
@@ -121,15 +121,9 @@
 
 ::: genkit.plugin_api.Action
 
-::: genkit.plugin_api.Flow
-
-::: genkit.plugin_api.StreamResponse
-
 ::: genkit.plugin_api.ActionMetadata
 
 ::: genkit.plugin_api.ActionKind
-
-::: genkit.plugin_api.StatusCodes
 
 ::: genkit.plugin_api.StatusName
 
@@ -144,6 +138,8 @@
 ::: genkit.plugin_api.get_cached_client
 
 ::: genkit.plugin_api.get_callable_json
+
+::: genkit.plugin_api.get_basic_usage_stats
 
 ## genkit.telemetry
 

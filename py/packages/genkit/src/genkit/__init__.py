@@ -49,7 +49,7 @@ from genkit._ai._tools import (
     restart_tool,
     tool,
 )
-from genkit._core._action import ActionRunContext
+from genkit._core._action import Action as Flow, ActionRunContext
 from genkit._core._context import ContextProvider, RequestData
 from genkit._core._error import GenkitError, PublicError
 from genkit._core._model import Document, Message, Part
@@ -86,6 +86,7 @@ __all__ = [
     'response',
     'MultipartToolResponse',
     # Flows, prompts, errors
+    'Flow',
     'ActionRunContext',
     'ExecutablePrompt',
     'GenkitError',

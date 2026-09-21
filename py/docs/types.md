@@ -40,6 +40,8 @@ Types exported from genkit, genkit.model, genkit.embedder, genkit.plugin_api, ge
 
 ::: genkit.MultipartToolResponse
 
+::: genkit.Flow
+
 ::: genkit.ActionRunContext
 
 ::: genkit.ExecutablePrompt
@@ -110,15 +112,9 @@ Types exported from genkit, genkit.model, genkit.embedder, genkit.plugin_api, ge
 
 ::: genkit.plugin_api.Action
 
-::: genkit.plugin_api.Flow
-
-::: genkit.plugin_api.StreamResponse
-
 ::: genkit.plugin_api.ActionMetadata
 
 ::: genkit.plugin_api.ActionKind
-
-::: genkit.plugin_api.StatusCodes
 
 ::: genkit.plugin_api.StatusName
 
