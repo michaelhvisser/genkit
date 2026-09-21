@@ -23,7 +23,7 @@ Example:
     from genkit.telemetry import configure_instrumentation
     from genkit_otel import OtelInstrumentation
 
-    configure_instrumentation(OtelInstrumentation(tracer_provider=theirs))
+    configure_instrumentation(OtelInstrumentation())
 """
 
 from genkit_otel._provider import OtelInstrumentation

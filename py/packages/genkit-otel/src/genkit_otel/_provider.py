@@ -106,8 +106,7 @@ class OtelInstrumentation:
     ``tracer_provider`` to mint on your provider; Cloud Trace exporters
     hang there too. Omit it to use the process-global provider.
 
-    The Developer UI collector is a separate HTTP poster. Construct this
-    yourself for Cloud, or call ``enable_google_cloud_telemetry()``.
+    The Developer UI collector is a separate HTTP poster.
     """
 
     def __init__(self, *, tracer_provider: TracerProvider | None = None) -> None:
