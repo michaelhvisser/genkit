@@ -22,6 +22,7 @@ import asyncio
 import os
 import traceback
 from collections.abc import Mapping, Sequence
+from contextlib import AbstractContextManager
 from typing import Any, TypeVar
 
 from opentelemetry import trace as trace_api
@@ -29,7 +30,7 @@ from opentelemetry.context import Context
 from opentelemetry.instrumentation.logging import LoggingInstrumentor
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SpanExporter
-from opentelemetry.trace import Link, NoOpTracer, NoOpTracerProvider, ProxyTracerProvider, SpanKind, StatusCode
+from opentelemetry.trace import Link, NoOpTracer, NoOpTracerProvider, ProxyTracerProvider, Span, SpanKind, StatusCode
 from opentelemetry.util import types
 
 from .._environment import is_dev_environment
@@ -288,7 +289,7 @@ class PluginTracer:
         record_exception: bool = True,
         set_status_on_exception: bool = True,
         end_on_exit: bool = True,
-    ) -> Any:  # noqa: ANN401
+    ) -> AbstractContextManager[Span]:
         # Imagen and Veo open their spans on this name. Keep it a real method
         # so those call sites stay valid even when no provider is minting yet.
         return self.inner().start_as_current_span(

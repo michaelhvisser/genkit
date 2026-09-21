@@ -19,10 +19,10 @@
 A plain ``Genkit()`` script does not record traces. Action results have
 empty ``trace_id`` and ``span_id``.
 
-``genkit start -- python app.py`` sets ``GENKIT_ENV=dev`` and a
+``genkit start -- uv run app.py`` sets ``GENKIT_ENV=dev`` and a
 collector URL before spawn; ``Genkit()`` installs an HTTP poster that
 fills the Traces tab without booting OpenTelemetry. If you start the
-app yourself (``genkit start``, then ``GENKIT_ENV=dev python app.py``),
+app yourself (``genkit start``, then ``GENKIT_ENV=dev uv run app.py``),
 the collector URL arrives on ``/api/notify`` or the reflection v2
 handshake and turns tracing on the same way.
 

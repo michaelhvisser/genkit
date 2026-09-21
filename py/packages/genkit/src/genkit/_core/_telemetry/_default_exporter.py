@@ -23,9 +23,8 @@ import os
 import threading
 import urllib.error
 import urllib.request
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from queue import Queue
-from typing import Any, cast
 from urllib.parse import urljoin, urlparse
 
 from opentelemetry import trace as trace_api
@@ -97,33 +96,25 @@ def _ns_to_ms(ns: int | None) -> float:
     return ns / 1_000_000 if ns is not None else 0
 
 
-def _otel_event_attributes_to_json(attrs: object | None) -> dict[str, Any]:
+def _otel_event_attributes_to_json(attrs: object | None) -> dict[str, str | int | float | bool | None]:
     """Flatten OTel event attributes for JSON / Dev UI (expects string keys and JSON-safe values)."""
-    if attrs is None:
+    if not isinstance(attrs, Mapping):
         return {}
-    out: dict[str, Any] = {}
-    try:
-        items_getter = getattr(attrs, 'items', None)
-        if callable(items_getter):
-            items = cast(Callable[[], Iterable[tuple[Any, Any]]], items_getter)()
+    out: dict[str, str | int | float | bool | None] = {}
+    for k, v in attrs.items():
+        key = str(k)
+        if isinstance(v, (str, int, float, bool)) or v is None:
+            out[key] = v
         else:
-            items = ()
-        for k, v in items:
-            key = str(k)
-            if isinstance(v, (str, int, float, bool)) or v is None:
-                out[key] = v
-            else:
-                out[key] = str(v)
-    except (TypeError, ValueError):
-        pass
+            out[key] = str(v)
     return out
 
 
-def json_safe_attributes(*, attrs: Mapping[Any, Any] | None) -> dict[str, Any]:
+def json_safe_attributes(*, attrs: Mapping[str, object] | None) -> dict[str, object]:
     """Drop values the collector cannot store so the rest of the trace still lands."""
     if not attrs:
         return {}
-    out: dict[str, Any] = {}
+    out: dict[str, object] = {}
     for key, value in attrs.items():
         name = str(key)
         try:
