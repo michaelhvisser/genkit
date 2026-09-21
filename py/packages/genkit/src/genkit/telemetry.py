@@ -46,6 +46,7 @@ from genkit._core._instrumentation.instrumentation import (
     reset_instrumentation,
     run_in_new_span,
     set_custom_metadata_attributes,
+    set_span_state,
 )
 from genkit._core._instrumentation.otel import OtelInstrumentation
 
@@ -63,4 +64,5 @@ __all__ = [
     'reset_instrumentation',
     'run_in_new_span',
     'set_custom_metadata_attributes',
+    'set_span_state',
 ]

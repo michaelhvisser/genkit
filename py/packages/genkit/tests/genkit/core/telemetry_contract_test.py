@@ -54,6 +54,7 @@ from genkit.telemetry import (
     configure_instrumentation,
     is_instrumented_by,
     reset_instrumentation,
+    set_span_state,
 )
 
 T = TypeVar('T')
@@ -785,6 +786,11 @@ async def test_set_custom_metadata_stamps_all_instrumentations_for_current_actio
 def test_set_custom_metadata_is_noop_outside_action() -> None:
     """Calling set_custom_metadata_attributes outside an action does not raise."""
     set_custom_metadata_attributes({'some': 'value'})
+
+
+def test_set_span_state_is_noop_outside_action() -> None:
+    """Calling set_span_state outside an action does not raise."""
+    set_span_state('error')
 
 
 @pytest.mark.asyncio

@@ -19,6 +19,7 @@ from genkit.telemetry import (
     reset_instrumentation,
     run_in_new_span,
     set_custom_metadata_attributes,
+    set_span_state,
 )
 
 
@@ -29,12 +30,16 @@ class RecordedSpan:
         self.span_id = span_id
         self.metadata: list[Mapping[str, object]] = []
         self.outputs: list[object] = []
+        self.states: list[str] = []
 
     def set_metadata(self, metadata: Mapping[str, object]) -> None:
         self.metadata.append(metadata)
 
     def set_output(self, value: object) -> None:
         self.outputs.append(value)
+
+    def set_state(self, state: str) -> None:
+        self.states.append(state)
 
 
 class FakeInstrumentation:
@@ -151,6 +156,38 @@ async def test_set_output_fans_out() -> None:
     await run_in_new_span('op', body)
     assert a.spans[0].outputs == [{'answer': 42}]
     assert b.spans[0].outputs == [{'answer': 42}]
+
+
+@pytest.mark.asyncio
+async def test_set_state_fans_out() -> None:
+    log: list[str] = []
+    a = FakeInstrumentation('a', log)
+    b = FakeInstrumentation('b', log)
+    configure_instrumentation(a)
+    configure_instrumentation(b)
+
+    async def body(span: SpanContext) -> None:
+        span.set_state('error')
+
+    await run_in_new_span('op', body)
+    assert a.spans[0].states == ['error']
+    assert b.spans[0].states == ['error']
+
+
+@pytest.mark.asyncio
+async def test_set_span_state_fans_out() -> None:
+    log: list[str] = []
+    a = FakeInstrumentation('a', log)
+    b = FakeInstrumentation('b', log)
+    configure_instrumentation(a)
+    configure_instrumentation(b)
+
+    async def body(_span: SpanContext) -> None:
+        set_span_state('error')
+
+    await run_in_new_span('op', body)
+    assert a.spans[0].states == ['error']
+    assert b.spans[0].states == ['error']
 
 
 def test_configure_rejects_junk_at_the_boundary() -> None:

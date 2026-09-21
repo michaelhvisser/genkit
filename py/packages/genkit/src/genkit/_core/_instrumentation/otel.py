@@ -61,6 +61,7 @@ class OtelSpanContext:
         self._span = span
         self._output: object | None = None
         self._output_set = False
+        self._state: str | None = None
 
     @property
     def trace_id(self) -> str:
@@ -95,6 +96,17 @@ class OtelSpanContext:
         self._output_set = True
         if self._span.is_recording():
             self._span.set_attribute(Attr.OUTPUT, to_json_attr(value))
+
+    @property
+    def state_was_set(self) -> bool:
+        return self._state is not None
+
+    def set_state(self, state: str) -> None:
+        self._state = state
+        if self._span.is_recording():
+            self._span.set_attribute(Attr.STATE, state)
+            if state == State.ERROR:
+                self._span.set_status(StatusCode.ERROR)
 
 
 class OtelInstrumentation:
@@ -147,7 +159,8 @@ class OtelInstrumentation:
                     result = await next(ctx)
                     if not ctx.output_was_set and result is not None:
                         span.set_attribute(Attr.OUTPUT, to_json_attr(result))
-                    span.set_attribute(Attr.STATE, State.SUCCESS)
+                    if not ctx.state_was_set:
+                        span.set_attribute(Attr.STATE, State.SUCCESS)
                     return result
                 except GenkitInterrupt:
                     span.set_attribute(Attr.STATE, State.SUCCESS)

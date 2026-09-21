@@ -105,6 +105,11 @@ class DirectSpanContext:
         self._span.output_was_set = True
         self._span.attributes[Attr.OUTPUT] = to_json_attr(value)
 
+    def set_state(self, state: str) -> None:
+        self._span.attributes[Attr.STATE] = state
+        if state == State.ERROR:
+            self._span.status_code = 2
+
 
 def now_unix_nano() -> int:
     return time.time_ns()
@@ -314,8 +319,9 @@ class DirectHttpInstrumentation:
                 result = await next(ctx)
                 if not span.output_was_set and result is not None:
                     span.attributes[Attr.OUTPUT] = to_json_attr(result)
-                span.attributes[Attr.STATE] = State.SUCCESS
-                span.status_code = 1
+                if Attr.STATE not in span.attributes:
+                    span.attributes[Attr.STATE] = State.SUCCESS
+                    span.status_code = 1
                 return result
             except GenkitInterrupt:
                 span.attributes[Attr.STATE] = State.SUCCESS

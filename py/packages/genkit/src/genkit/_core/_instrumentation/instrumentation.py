@@ -31,12 +31,13 @@ from pydantic import BaseModel
 from .._trace._attrs import Attr, metadata_key
 
 T = TypeVar('T')
+T_co = TypeVar('T_co', covariant=True)
 
 
-class SpanNext(Protocol[T]):
+class SpanNext(Protocol[T_co]):
     """``next()`` or ``next(span)``. A logger that does not mint ids calls ``next()``."""
 
-    def __call__(self, span: SpanContext | None = None) -> Awaitable[T]: ...
+    def __call__(self, span: SpanContext | None = None) -> Awaitable[T_co]: ...
 
 
 @dataclass(frozen=True)
@@ -76,6 +77,10 @@ class SpanContext(Protocol):
 
     def set_output(self, value: object) -> None:
         """Override genkit:output when the return value is not the span output."""
+        ...
+
+    def set_state(self, state: str) -> None:
+        """Override genkit:state (e.g. State.ERROR)."""
         ...
 
 
@@ -210,6 +215,13 @@ def set_custom_metadata_attributes(attributes: Mapping[str, object]) -> None:
         span.set_metadata(attributes)
 
 
+def set_span_state(state: str) -> None:
+    """Write genkit:state on the active span. No-op outside a span."""
+    span = current_span.get()
+    if span is not None:
+        span.set_state(state)
+
+
 async def run_in_new_span(
     name: str,
     fn: Callable[[SpanContext], Awaitable[T]],
@@ -289,6 +301,9 @@ class NoopSpanContext:
     def set_output(self, value: object) -> None:
         return
 
+    def set_state(self, state: str) -> None:
+        return
+
 
 class CompositeSpanContext:
     """Fans metadata/output to every provider; ids are first non-empty."""
@@ -313,6 +328,11 @@ class CompositeSpanContext:
         for span in self._spans:
             with contextlib.suppress(Exception):
                 span.set_output(value)
+
+    def set_state(self, state: str) -> None:
+        for span in self._spans:
+            with contextlib.suppress(Exception):
+                span.set_state(state)
 
     def _first_non_empty(self, get: Callable[[SpanContext], str]) -> str:
         for span in self._spans:
