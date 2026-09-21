@@ -44,7 +44,6 @@ class RealtimeSpanProcessor(SimpleSpanProcessor):
 
     @override
     def force_flush(self, timeout_millis: int = 30000) -> bool:
-        """Forward force_flush to exporter if supported (e.g. TraceServerExporter)."""
-        if hasattr(self.span_exporter, 'force_flush'):
-            return bool(self.span_exporter.force_flush(timeout_millis=timeout_millis))
-        return True
+        # SimpleSpanProcessor.force_flush is a no-op True. The Dev UI
+        # exporter queues POSTs; wait for that queue.
+        return bool(self.span_exporter.force_flush(timeout_millis=timeout_millis))
