@@ -16,7 +16,7 @@
 
 """Telemetry suppression context variable.
 
-Kept in its own module to avoid circular imports between _action, _tracing,
+Kept in its own module to avoid circular imports between _action, instrumentation,
 and the span processor chain.
 """
 

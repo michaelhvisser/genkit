@@ -256,7 +256,7 @@ async def test_action_raises_errors() -> None:
 
 @pytest.mark.asyncio
 async def test_action_error_includes_trace_id_when_instrumented() -> None:
-    from genkit._core._otel_instrumentation import init_provider
+    from genkit._core._instrumentation.otel import init_provider
     from genkit.telemetry import OtelInstrumentation, configure_instrumentation, reset_instrumentation
 
     reset_instrumentation()

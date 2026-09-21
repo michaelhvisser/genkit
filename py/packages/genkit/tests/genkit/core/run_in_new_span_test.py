@@ -26,22 +26,27 @@ from genkit import ActionKind, Genkit
 from genkit._ai._tools import Interrupt, ToolRunContext
 from genkit._core._action import Action, ActionRunContext
 from genkit._core._error import GenkitError
-from genkit._core._instrumentation import reset_instrumentation, run_in_new_span
-from genkit._core._otel_instrumentation import OtelInstrumentation, add_custom_exporter, start_attributes
+from genkit._core._instrumentation.instrumentation import (
+    SpanMetadata,
+    parent_path_context,
+    reset_instrumentation,
+    run_in_new_span,
+    start_attributes,
+)
+from genkit._core._instrumentation.otel import OtelInstrumentation, add_custom_exporter
 from genkit._core._trace._attrs import metadata_key
 from genkit._core._trace._realtime_processor import RealtimeSpanProcessor
-from genkit._core._tracing import SpanMetadata, _parent_path_context
 from genkit.telemetry import configure_instrumentation, is_instrumented_by
 
 
 @pytest.fixture(autouse=True)
 def _reset_parent_path() -> Generator[None, None, None]:
     """Each test starts with an empty parent-path context to keep paths independent."""
-    token = _parent_path_context.set('')
+    token = parent_path_context.set('')
     try:
         yield
     finally:
-        _parent_path_context.reset(token)
+        parent_path_context.reset(token)
 
 
 @pytest.fixture

@@ -20,6 +20,7 @@ from structlog.testing import capture_logs
 
 from genkit._core._constants import GENKIT_VERSION
 from genkit._core._environment import GENKIT_ENV
+from genkit._core._instrumentation.instrumentation import run_in_new_span
 from genkit._core._logger import get_logger, is_debug_enabled
 from genkit._core._trace._log_exporter import (
     BATCH_DELAY_S,
@@ -38,7 +39,6 @@ from genkit._core._trace._log_exporter import (
     put_poison_pill,
     reset_log_export,
 )
-from genkit._core._tracing import run_in_new_span
 
 
 @pytest.fixture
@@ -127,7 +127,7 @@ def test_build_log_record_stamps_active_span() -> None:
 
     import asyncio
 
-    from genkit._core._tracing import init_provider
+    from genkit._core._instrumentation.otel import init_provider
     from genkit.telemetry import OtelInstrumentation, configure_instrumentation, reset_instrumentation
 
     provider = init_provider()

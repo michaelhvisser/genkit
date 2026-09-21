@@ -5,16 +5,16 @@
 
 from unittest.mock import MagicMock, patch
 
-from genkit._core._otel_instrumentation import init_provider
+from genkit._core._instrumentation.otel import init_provider
 
 
 def test_init_provider_does_not_rewrite_log_format() -> None:
     """The shared TTY stays as the process configured it — no trace_id= wall."""
     instrumentor = MagicMock()
     with (
-        patch('genkit._core._otel_instrumentation.trace_api.get_tracer_provider', return_value=None),
-        patch('genkit._core._otel_instrumentation.trace_api.set_tracer_provider'),
-        patch('genkit._core._otel_instrumentation.LoggingInstrumentor', return_value=instrumentor),
+        patch('genkit._core._instrumentation.otel.trace_api.get_tracer_provider', return_value=None),
+        patch('genkit._core._instrumentation.otel.trace_api.set_tracer_provider'),
+        patch('genkit._core._instrumentation.otel.LoggingInstrumentor', return_value=instrumentor),
     ):
         init_provider()
 

@@ -64,7 +64,7 @@ from genkit._core._action import (
 )
 from genkit._core._background import _ensure_operation, missing_operation_error, stamp_operation_action
 from genkit._core._error import GenkitError
-from genkit._core._instrumentation import run_in_new_span
+from genkit._core._instrumentation.instrumentation import run_in_new_span
 from genkit._core._logger import get_logger, is_debug_enabled
 from genkit._core._middleware import (
     BaseMiddleware,

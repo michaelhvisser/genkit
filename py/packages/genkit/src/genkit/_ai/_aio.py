@@ -95,10 +95,10 @@ from genkit._core._dap import (
     DynamicActionProvider,
     define_dynamic_action_provider as define_dap_block,
 )
-from genkit._core._direct_http_instrumentation import maybe_inject_dev_instrumentation
 from genkit._core._environment import is_dev_environment
 from genkit._core._error import GenkitError
-from genkit._core._instrumentation import run_in_new_span
+from genkit._core._instrumentation.http import maybe_inject_dev_instrumentation
+from genkit._core._instrumentation.instrumentation import run_in_new_span
 from genkit._core._logger import configure_logging, get_logger, resolve_level
 from genkit._core._middleware import (
     BaseMiddleware,

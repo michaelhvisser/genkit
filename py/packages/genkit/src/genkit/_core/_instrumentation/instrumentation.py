@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Telemetry dispatcher. Composes Instrumentation providers; no OpenTelemetry."""
+"""Telemetry dispatcher and backend-agnostic types. No OpenTelemetry."""
 
 from __future__ import annotations
 
@@ -23,19 +23,83 @@ import inspect
 import json
 from collections.abc import Awaitable, Callable, Mapping
 from contextvars import ContextVar
-from typing import Any, TypeVar
+from dataclasses import dataclass, field
+from typing import Any, Protocol, TypeVar, runtime_checkable
 
 from pydantic import BaseModel
 
-from ._instrumentation_api import (
-    DisposableInstrumentation,
-    Instrumentation,
-    SpanContext,
-    SpanMetadata,
-)
-from ._trace._attrs import Attr, metadata_key
+from .._trace._attrs import Attr, metadata_key
 
 T = TypeVar('T')
+
+
+class SpanNext(Protocol[T]):
+    """``next()`` or ``next(span)``. A logger that does not mint ids calls ``next()``."""
+
+    def __call__(self, span: SpanContext | None = None) -> Awaitable[T]: ...
+
+
+@dataclass(frozen=True)
+class SpanMetadata:
+    """Description of a span about to be created.
+
+    Providers decide how to encode values. Extra fields beyond name / action_type
+    / input / attributes are Genkit product facts (Dev UI path, init, subtype).
+    """
+
+    name: str
+    action_type: str | None = None
+    input: object | None = None
+    attributes: Mapping[str, str] = field(default_factory=dict)
+    subtype: str | None = None
+    init: object | None = None
+    metadata: Mapping[str, object] | None = None
+    is_root: bool | None = None
+
+
+class SpanContext(Protocol):
+    """Handle to a live span. No backend types leak through."""
+
+    @property
+    def trace_id(self) -> str:
+        """Trace id, or empty when not instrumented."""
+        ...
+
+    @property
+    def span_id(self) -> str:
+        """Span id, or empty when not instrumented."""
+        ...
+
+    def set_metadata(self, metadata: Mapping[str, object]) -> None:
+        """Attach custom metadata. Safe to call multiple times."""
+        ...
+
+    def set_output(self, value: object) -> None:
+        """Override genkit:output when the return value is not the span output."""
+        ...
+
+
+@runtime_checkable
+class Instrumentation(Protocol):
+    """Pluggable provider. ``run_in_new_span`` wraps ``next`` like middleware."""
+
+    async def run_in_new_span(
+        self,
+        metadata: SpanMetadata,
+        next: SpanNext[T],
+    ) -> T: ...
+
+
+@runtime_checkable
+class DisposableInstrumentation(Protocol):
+    """Optional: a provider that holds a subscription or client.
+
+    ``reset_instrumentation`` calls ``dispose`` so a leftover log handler
+    cannot keep posting after tests tear down.
+    """
+
+    def dispose(self) -> None: ...
+
 
 instrumentations: list[Instrumentation] = []
 

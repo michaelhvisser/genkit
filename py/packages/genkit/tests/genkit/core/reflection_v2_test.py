@@ -46,9 +46,9 @@ from websockets.asyncio.server import serve
 
 from genkit import Genkit
 from genkit._core._action import Action, ActionKind, ActionRunContext, BidiAction
+from genkit._core._instrumentation.otel import init_provider
 from genkit._core._middleware import BaseMiddleware
 from genkit._core._model import AgentInit, AgentInput, ModelConfig
-from genkit._core._otel_instrumentation import init_provider
 from genkit._core._reflection_v2 import (
     JSON_RPC_INVALID_PARAMS,
     JSON_RPC_METHOD_NOT_FOUND,

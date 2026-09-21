@@ -31,11 +31,15 @@ production. That path uses ``OtelInstrumentation``. Under
 ``genkit start``, ``Genkit()`` still owns the Developer UI collector.
 """
 
-from genkit._core._direct_http_instrumentation import (
+from genkit._core._instrumentation.http import (
     GenkitBuiltinInstrumentation,
     genkit_dev_instrumentation,
 )
-from genkit._core._instrumentation import (
+from genkit._core._instrumentation.instrumentation import (
+    DisposableInstrumentation,
+    Instrumentation,
+    SpanContext,
+    SpanMetadata,
     configure_instrumentation,
     dispose_instrumentations,
     is_instrumented_by,
@@ -43,13 +47,7 @@ from genkit._core._instrumentation import (
     run_in_new_span,
     set_custom_metadata_attributes,
 )
-from genkit._core._instrumentation_api import (
-    DisposableInstrumentation,
-    Instrumentation,
-    SpanContext,
-    SpanMetadata,
-)
-from genkit._core._otel_instrumentation import OtelInstrumentation
+from genkit._core._instrumentation.otel import OtelInstrumentation
 
 __all__ = [
     'DisposableInstrumentation',

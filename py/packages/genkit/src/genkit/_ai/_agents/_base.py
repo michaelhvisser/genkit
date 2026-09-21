@@ -68,7 +68,7 @@ from genkit._ai._prompt import (
 from genkit._ai._tools import Tool
 from genkit._core._action import Action, ActionKind, ActionRunContext, BidiAction, BidiFn, get_current_context
 from genkit._core._error import GenkitError
-from genkit._core._instrumentation import set_custom_metadata_attributes
+from genkit._core._instrumentation.instrumentation import set_custom_metadata_attributes
 from genkit._core._middleware import BaseMiddleware
 from genkit._core._model import (
     AgentInit,

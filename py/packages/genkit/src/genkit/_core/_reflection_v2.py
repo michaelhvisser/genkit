@@ -47,8 +47,8 @@ from websockets.exceptions import ConnectionClosed
 from genkit._core._action import Action, BidiAction
 from genkit._core._channel import CloseableQueue
 from genkit._core._constants import GENKIT_VERSION
-from genkit._core._direct_http_instrumentation import connect_developer_ui_collector
 from genkit._core._error import ReflectionError, ReflectionErrorDetails, StatusCodes, get_reflection_json
+from genkit._core._instrumentation.http import connect_developer_ui_collector
 from genkit._core._logger import get_logger
 from genkit._core._middleware import GenerateMiddleware
 from genkit._core._model import AgentInput, ModelRef

@@ -27,7 +27,7 @@ from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from genkit._core._action import Action, ActionKind, ActionRunContext
 from genkit._core._error import GenkitError, GenkitInterrupt
-from genkit._core._instrumentation import set_custom_metadata_attributes
+from genkit._core._instrumentation.instrumentation import set_custom_metadata_attributes
 from genkit._core._logger import get_logger
 from genkit._core._middleware import GenerateMiddlewareContext
 from genkit._core._model import MultipartToolResponse, OutputT, Part, as_part

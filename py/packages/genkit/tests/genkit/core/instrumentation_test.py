@@ -170,7 +170,7 @@ def test_configure_rejects_the_provider_class() -> None:
 
     with pytest.raises(
         TypeError,
-        match='type genkit._core._otel_instrumentation.OtelInstrumentation',
+        match='type genkit._core._instrumentation.otel.OtelInstrumentation',
     ):
         configure_instrumentation(OtelInstrumentation)  # type: ignore[arg-type]
 

@@ -27,22 +27,24 @@ from opentelemetry.trace import NoOpTracerProvider
 
 from genkit import ActionKind, Genkit
 from genkit._core._action import Action
-from genkit._core._direct_http_instrumentation import (
+from genkit._core._environment import GENKIT_ENV
+from genkit._core._instrumentation.http import (
     DirectHttpInstrumentation,
     flush_direct_http_instrumentations,
 )
-from genkit._core._environment import GENKIT_ENV
-from genkit._core._instrumentation import (
+from genkit._core._instrumentation.instrumentation import (
+    Instrumentation,
     NoopSpanContext,
+    SpanContext,
+    SpanMetadata,
     instrumentations,
+    parent_path_context,
     run_in_new_span,
     set_custom_metadata_attributes,
 )
-from genkit._core._instrumentation_api import Instrumentation, SpanContext, SpanMetadata
-from genkit._core._otel_instrumentation import (
+from genkit._core._instrumentation.otel import (
     add_custom_exporter,
     maybe_configure_otel_for_exporters,
-    parent_path_context,
 )
 from genkit._core._reflection_v2 import ReflectionServerV2
 from genkit._core._registry import Registry
@@ -312,10 +314,10 @@ def test_init_provider_does_not_rewrite_log_format(monkeypatch: pytest.MonkeyPat
             seen['set_logging_format'] = set_logging_format
 
     monkeypatch.setattr(
-        'genkit._core._otel_instrumentation.LoggingInstrumentor',
+        'genkit._core._instrumentation.otel.LoggingInstrumentor',
         FakeInstrumentor,
     )
-    from genkit._core._otel_instrumentation import init_provider
+    from genkit._core._instrumentation.otel import init_provider
 
     init_provider()
     assert seen['set_logging_format'] is False
@@ -372,7 +374,7 @@ def _capture_handshake_exporters(monkeypatch: pytest.MonkeyPatch) -> list[object
         seen.append(exporter)
         real(exporter, name)
 
-    monkeypatch.setattr('genkit._core._otel_instrumentation.add_custom_exporter', capture)
+    monkeypatch.setattr('genkit._core._instrumentation.otel.add_custom_exporter', capture)
     return seen
 
 
@@ -565,7 +567,7 @@ def test_importing_genkit_does_not_start_a_tracer() -> None:
     script = """
 from opentelemetry import trace
 from genkit import Genkit  # noqa: F401
-from genkit._core._otel_instrumentation import is_placeholder_provider
+from genkit._core._instrumentation.otel import is_placeholder_provider
 from genkit.telemetry import OtelInstrumentation, is_instrumented_by
 
 assert not is_instrumented_by(OtelInstrumentation)

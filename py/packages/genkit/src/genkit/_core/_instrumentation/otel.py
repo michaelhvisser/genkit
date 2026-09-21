@@ -32,9 +32,15 @@ from opentelemetry.sdk.trace.export import SpanExporter
 from opentelemetry.trace import Link, NoOpTracer, NoOpTracerProvider, ProxyTracerProvider, SpanKind, StatusCode
 from opentelemetry.util import types
 
-from ._environment import is_dev_environment
-from ._error import GenkitError, GenkitInterrupt
-from ._instrumentation import (
+from .._environment import is_dev_environment
+from .._error import GenkitError, GenkitInterrupt
+from .._logger import get_logger
+from .._trace._attrs import Attr, State, metadata_key
+from .._trace._default_exporter import create_span_processor
+from .._trace._path import build_path
+from .instrumentation import (
+    SpanMetadata,
+    SpanNext,
     configure_instrumentation,
     instrumentations,
     is_instrumented_by,
@@ -42,11 +48,6 @@ from ._instrumentation import (
     start_attributes,
     to_json_attr,
 )
-from ._instrumentation_api import SpanMetadata, SpanNext
-from ._logger import get_logger
-from ._trace._attrs import Attr, State, metadata_key
-from ._trace._default_exporter import create_span_processor
-from ._trace._path import build_path
 
 logger = get_logger(__name__)
 

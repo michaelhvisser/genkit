@@ -32,9 +32,15 @@ from dataclasses import dataclass, field
 from typing import TypeVar
 from urllib.parse import urljoin, urlparse
 
-from ._environment import is_dev_environment
-from ._error import GenkitError, GenkitInterrupt
-from ._instrumentation import (
+from .._environment import is_dev_environment
+from .._error import GenkitError, GenkitInterrupt
+from .._logger import get_logger
+from .._trace._attrs import Attr, State, metadata_key
+from .._trace._path import build_path
+from .instrumentation import (
+    Instrumentation,
+    SpanMetadata,
+    SpanNext,
     configure_instrumentation,
     instrumentations,
     is_instrumented_by,
@@ -42,10 +48,6 @@ from ._instrumentation import (
     start_attributes,
     to_json_attr,
 )
-from ._instrumentation_api import Instrumentation, SpanMetadata, SpanNext
-from ._logger import get_logger
-from ._trace._attrs import Attr, State, metadata_key
-from ._trace._path import build_path
 
 logger = get_logger(__name__)
 
