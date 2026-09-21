@@ -17,6 +17,7 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
+from genkit_otel import OtelInstrumentation
 from structlog.testing import capture_logs
 
 from genkit._core._constants import GENKIT_VERSION
@@ -45,7 +46,6 @@ from genkit._core._telemetry._log_exporter import (
     reset_log_export,
 )
 from genkit.telemetry import configure_instrumentation
-from genkit_otel import OtelInstrumentation
 
 
 @pytest.fixture

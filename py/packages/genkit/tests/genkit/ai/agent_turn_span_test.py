@@ -23,6 +23,7 @@ import re
 from collections.abc import Generator, Sequence
 
 import pytest
+from genkit_otel import OtelInstrumentation
 from opentelemetry import trace as trace_api
 from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
@@ -40,7 +41,6 @@ from genkit._core._telemetry._attrs import Attr, metadata_key
 from genkit._core._telemetry._instrumentation import reset_instrumentation
 from genkit.exp.agent import AgentFinishReason, InMemorySessionStore
 from genkit.telemetry import configure_instrumentation
-from genkit_otel import OtelInstrumentation
 
 UUID_RE = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.I)
 SESSION_ID_ATTR = metadata_key('agent:sessionId')

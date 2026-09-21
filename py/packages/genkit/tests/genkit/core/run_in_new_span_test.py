@@ -11,6 +11,7 @@ import logging
 from collections.abc import Generator, Sequence
 
 import pytest
+from genkit_otel import OtelInstrumentation
 from opentelemetry import trace as trace_api
 from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExportResult
@@ -33,7 +34,6 @@ from genkit._core._telemetry._instrumentation import (
 from genkit._core._telemetry._realtime_processor import RealtimeSpanProcessor
 from genkit.plugin_api import add_custom_exporter
 from genkit.telemetry import configure_instrumentation
-from genkit_otel import OtelInstrumentation
 
 
 @pytest.fixture(autouse=True)

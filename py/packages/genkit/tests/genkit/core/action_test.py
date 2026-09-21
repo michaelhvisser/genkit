@@ -9,6 +9,7 @@ import json
 from typing import Any, cast
 
 import pytest
+from genkit_otel import OtelInstrumentation
 from pydantic import BaseModel, ConfigDict
 
 from genkit import Message, ModelRequest, Part
@@ -29,7 +30,6 @@ from genkit._core._model import OutputConfig
 from genkit._core._telemetry._exporters import init_provider
 from genkit._core._telemetry._instrumentation import reset_instrumentation
 from genkit.telemetry import configure_instrumentation
-from genkit_otel import OtelInstrumentation
 
 
 def test_action_enum_behaves_like_str() -> None:

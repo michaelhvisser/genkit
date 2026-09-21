@@ -25,10 +25,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 from genkit_google_cloud.telemetry.config import resolve_project_id
 from genkit_google_cloud.telemetry.tracing import add_gcp_telemetry, enable_google_cloud_telemetry
+from genkit_otel import OtelInstrumentation
 
 from genkit._core._telemetry._instrumentation import instrumentations, is_instrumented_by, reset_instrumentation
 from genkit.telemetry import configure_instrumentation
-from genkit_otel import OtelInstrumentation
 
 # Environment variable and value constants (matching genkit._core._environment)
 _GENKIT_ENV = 'GENKIT_ENV'

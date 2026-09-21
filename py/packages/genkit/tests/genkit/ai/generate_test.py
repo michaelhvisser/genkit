@@ -13,6 +13,7 @@ from typing import Any, cast
 
 import pytest
 import yaml
+from genkit_otel import OtelInstrumentation
 from opentelemetry import trace as trace_api
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
@@ -55,7 +56,6 @@ from genkit.middleware import (
 )
 from genkit.plugin_api import MiddlewarePlugin, new_middleware
 from genkit.telemetry import configure_instrumentation
-from genkit_otel import OtelInstrumentation
 
 
 def _to_dict(obj: object) -> object:

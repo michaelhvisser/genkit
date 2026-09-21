@@ -19,7 +19,9 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any, TypeVar
 from unittest.mock import MagicMock
 
+import genkit_otel
 import pytest
+from genkit_otel import OtelInstrumentation
 from httpx import ASGITransport, AsyncClient
 from opentelemetry import trace as trace_api
 from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
@@ -27,7 +29,6 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import NoOpTracerProvider
 
-import genkit_otel
 from genkit import ActionKind, Genkit, plugin_api, telemetry
 from genkit._core._action import Action
 from genkit._core._environment import GENKIT_ENV
@@ -55,7 +56,6 @@ from genkit._core._telemetry.http import (
 )
 from genkit.plugin_api import add_custom_exporter, tracer
 from genkit.telemetry import configure_instrumentation
-from genkit_otel import OtelInstrumentation
 
 T = TypeVar('T')
 

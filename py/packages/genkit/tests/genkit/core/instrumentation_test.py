@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable, Mapping
 
 import pytest
+from genkit_otel import OtelInstrumentation
 
 from genkit import ActionKind
 from genkit._core._action import Action
@@ -23,7 +24,6 @@ from genkit._core._telemetry._instrumentation import (
     set_span_state,
 )
 from genkit.telemetry import configure_instrumentation
-from genkit_otel import OtelInstrumentation
 
 
 class RecordedSpan:
