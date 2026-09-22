@@ -264,47 +264,41 @@ async def test_enable_google_cloud_telemetry_is_enough() -> None:
 
 
 @pytest.mark.asyncio
-async def test_enable_sends_cloud_trace_to_their_tracer_provider() -> None:
-    """OtelInstrumentation(tracer_provider=theirs) then an exporter: Cloud Trace sees their spans."""
-    theirs = TracerProvider()
+async def test_set_global_tracer_provider_then_add_exporter_gets_action_span() -> None:
+    """They already set the process tracer; add_custom_exporter sends Cloud there."""
     cloud = InMemorySpanExporter()
-    configure_instrumentation(OtelInstrumentation(tracer_provider=theirs))
     add_custom_exporter(cloud, 'cloud-trace')
+    configure_instrumentation(OtelInstrumentation())
 
     action = Action(name='joke', kind=ActionKind.FLOW, fn=_joke)
     result = await action.run()
-    theirs.force_flush()
+    _force_flush()
 
     assert _hex_id(result.trace_id, 32)
     names = [span.name for span in cloud.get_finished_spans()]
     assert 'joke' in names
-    theirs.shutdown()
 
 
-def test_exporter_refuses_a_provider_it_cannot_attach_to() -> None:
-    """Wrong provider type: named TypeError, not a silent empty Cloud Trace."""
-    yours = OtelInstrumentation()
-    yours._tracer_provider = NoOpTracerProvider()  # pyright: ignore[reportAttributeAccessIssue]
-    configure_instrumentation(yours)
-    with pytest.raises(TypeError, match='not a TracerProvider'):
-        add_custom_exporter(InMemorySpanExporter(), 'cloud-trace')
+@pytest.mark.asyncio
+async def test_configure_otel_on_a_private_provider_then_add_exporter_does_not_send_that_action_to_cloud() -> None:
+    """Private OtelInstrumentation then an exporter: Cloud hangs on the global, so that action is not there."""
+    private = TracerProvider()
+    cloud = InMemorySpanExporter()
+    configure_instrumentation(OtelInstrumentation(tracer_provider=private))
+    add_custom_exporter(cloud, 'cloud-trace')
+
+    action = Action(name='joke', kind=ActionKind.FLOW, fn=_joke)
+    result = await action.run()
+    _force_flush()
+    private.force_flush()
+
+    assert _hex_id(result.trace_id, 32)
+    names = [span.name for span in cloud.get_finished_spans()]
+    assert 'joke' not in names
+    private.shutdown()
 
 
-def test_exporter_reraises_when_their_provider_cannot_add() -> None:
-    """Attach failure on theirs must surface; otherwise Cloud Trace stays empty."""
-    theirs = TracerProvider()
-
-    def boom(_processor: object) -> None:
-        raise RuntimeError('processor dead')
-
-    theirs.add_span_processor = boom  # type: ignore[method-assign]
-    configure_instrumentation(OtelInstrumentation(tracer_provider=theirs))
-    with pytest.raises(RuntimeError, match='processor dead'):
-        add_custom_exporter(InMemorySpanExporter(), 'cloud-trace')
-    theirs.shutdown()
-
-
-def test_exporter_swallows_when_the_global_provider_cannot_add() -> None:
+def test_add_custom_exporter_when_global_cannot_attach_does_not_raise() -> None:
     """Global attach failure stays a log line so enable stays fail-safe."""
     global_provider = trace_api.get_tracer_provider()
 
@@ -313,6 +307,19 @@ def test_exporter_swallows_when_the_global_provider_cannot_add() -> None:
 
     global_provider.add_span_processor = boom  # type: ignore[method-assign]
     add_custom_exporter(InMemorySpanExporter(), 'cloud-trace')
+
+
+def test_add_custom_exporter_does_not_touch_a_private_provider_that_cannot_add() -> None:
+    """A dead tracer_provider= on OtelInstrumentation does not fail enable; Cloud still hangs on the global."""
+    private = TracerProvider()
+
+    def boom(_processor: object) -> None:
+        raise RuntimeError('processor dead')
+
+    private.add_span_processor = boom  # type: ignore[method-assign]
+    configure_instrumentation(OtelInstrumentation(tracer_provider=private))
+    add_custom_exporter(InMemorySpanExporter(), 'cloud-trace')
+    private.shutdown()
 
 
 def test_init_provider_does_not_rewrite_log_format(monkeypatch: pytest.MonkeyPatch) -> None:

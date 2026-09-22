@@ -63,46 +63,26 @@ def is_placeholder_provider(provider: object) -> bool:
     return isinstance(provider, (ProxyTracerProvider, NoOpTracerProvider))
 
 
-def provider_for_exporters() -> tuple[TracerProvider, bool]:
-    """Provider minting Genkit spans, and whether they handed it to us.
-
-    If a backend exposed ``tracer_provider``, exporters have to land there
-    or Cloud Trace stays empty. Otherwise the global provider.
-    """
-    for inst in instrumentations:
-        provider = getattr(inst, 'tracer_provider', None)
-        if provider is None:
-            continue
-        if not isinstance(provider, TracerProvider):
-            raise TypeError(
-                f'Cannot attach an exporter: instrumentation is using {type(provider).__name__}, not a TracerProvider.'
-            )
-        return provider, True
-    return init_provider(), False
-
-
 def add_custom_exporter(exporter: SpanExporter | None, name: str = 'last') -> None:
-    """Attach a span exporter to the provider minting Genkit spans.
+    """Attach a span exporter to the process-global tracer provider.
 
-    If a backend was given ``tracer_provider=``, the exporter hangs
-    there. Otherwise the process-global provider. This does not turn
-    tracing on. Call ``configure_instrumentation`` so spans exist for
-    the exporter to see. Under ``genkit start``, ``Genkit()`` still
-    owns the Developer UI HTTP poster.
+    Uses the global provider if the app already registered one; otherwise
+    boots one. This does not turn tracing on. Call
+    ``configure_instrumentation`` so spans exist for the exporter to see.
+    Under ``genkit start``, ``Genkit()`` still owns the Developer UI HTTP
+    poster.
     """
     if exporter is None:
         logger.warn(f'{name} exporter is None')
         return
 
-    provider, theirs = provider_for_exporters()
+    provider = init_provider()
     try:
         provider.add_span_processor(create_span_processor(exporter))
         logger.debug(f'{name} exporter added successfully.')
     except Exception:
         logger.error(f'tracing.add_custom_exporter: failed to add exporter {name}')
         logger.exception('Failed to add custom exporter')
-        if theirs:
-            raise
 
 
 class PluginTracer:

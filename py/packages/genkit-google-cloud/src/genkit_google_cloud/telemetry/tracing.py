@@ -49,9 +49,21 @@ from typing import Any
 import structlog
 from opentelemetry.sdk.trace.sampling import Sampler
 
+from genkit._core._error import GenkitError
+
 from .config import GcpTelemetry
 
 logger = structlog.get_logger(__name__)
+
+# Once per process: the app (or a test) may call enable_google_cloud_telemetry
+# once. A second call raises so Cloud Trace does not get two exporters.
+_enable_google_cloud_telemetry_already_called = False
+
+
+def _reset_google_cloud_telemetry() -> None:
+    """Clear the once-per-process latch. Tests only."""
+    global _enable_google_cloud_telemetry_already_called
+    _enable_google_cloud_telemetry_already_called = False
 
 
 def enable_google_cloud_telemetry(
@@ -69,10 +81,11 @@ def enable_google_cloud_telemetry(
 ) -> None:
     """Attach Cloud Trace and Cloud Monitoring exporters.
 
-    This is enough for Cloud Trace. If you already configured
-    ``OtelInstrumentation``, the Cloud exporter hangs on that provider
-    (your ``tracer_provider`` if you passed one). Under ``genkit start``,
-    ``Genkit()`` still attaches the Developer UI collector.
+    Call this once from the app. A second call raises. This is enough
+    for Cloud Trace. The Cloud exporter hangs on the process-global
+    tracer provider (the one they already registered, or one we boot).
+    Under ``genkit start``, ``Genkit()`` still attaches the Developer
+    UI collector.
 
     Cloud exporters are skipped when ``GENKIT_ENV=dev`` and
     ``force_dev_export=False``, or when ``disable_traces=True``. Model
@@ -133,6 +146,14 @@ def enable_google_cloud_telemetry(
         - Cloud Trace: https://cloud.google.com/trace/docs
         - Cloud Monitoring: https://cloud.google.com/monitoring/docs
     """
+    global _enable_google_cloud_telemetry_already_called
+    if _enable_google_cloud_telemetry_already_called:
+        raise GenkitError(
+            status='FAILED_PRECONDITION',
+            message='enable_google_cloud_telemetry() was already called. Call it once from the app.',
+        )
+    _enable_google_cloud_telemetry_already_called = True
+
     # Handle legacy force_export parameter
     if force_export is not None:
         logger.warning('force_export is deprecated, use force_dev_export instead')

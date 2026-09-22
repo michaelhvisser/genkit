@@ -103,8 +103,8 @@ class OtelInstrumentation:
     """OpenTelemetry provider for Cloud Trace and a host APM.
 
     Records each action as a span with ``genkit:*`` attributes. Pass
-    ``tracer_provider`` to mint on your provider; Cloud Trace exporters
-    hang there too. Omit it to use the process-global provider.
+    ``tracer_provider`` to mint on that provider. Omit it to use the
+    process-global provider. Cloud exporters hang on the global.
 
     The Developer UI collector is a separate HTTP poster.
     """
