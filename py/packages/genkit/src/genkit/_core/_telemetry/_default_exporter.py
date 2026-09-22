@@ -32,6 +32,7 @@ from opentelemetry import trace as trace_api
 from opentelemetry.sdk.trace import ReadableSpan, SpanProcessor
 from opentelemetry.sdk.trace.export import (
     BatchSpanProcessor,
+    SimpleSpanProcessor,
     SpanExporter,
     SpanExportResult,
 )
@@ -51,7 +52,6 @@ from genkit._core._typing import (
 )
 
 from ._attrs import Attr, Subtype
-from ._realtime_processor import RealtimeSpanProcessor
 
 logger = get_logger(__name__)
 
@@ -401,7 +401,10 @@ def init_telemetry_server_exporter() -> SpanExporter | None:
 
 
 def create_span_processor(exporter: SpanExporter) -> SpanProcessor:
-    """RealtimeSpanProcessor in dev, BatchSpanProcessor in production."""
+    """Export on span end. Local is immediate; prod batches.
+
+    Live Developer UI rows are the HTTP poster, not this processor.
+    """
     if is_dev_environment():
-        return RealtimeSpanProcessor(exporter)
+        return SimpleSpanProcessor(exporter)
     return BatchSpanProcessor(exporter)

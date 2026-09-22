@@ -19,7 +19,7 @@
 This module tests:
     - TraceServerExporter: Exports spans to a telemetry server
     - extract_span_data: Extracts span data for export
-    - create_span_processor: Creates appropriate span processor based on environment
+    - create_span_processor: SimpleSpanProcessor in local, BatchSpanProcessor in prod
     - init_telemetry_server_exporter: Initializes the telemetry server exporter
 """
 
@@ -34,7 +34,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from opentelemetry import trace as trace_api
 from opentelemetry.sdk.trace import Event, ReadableSpan
-from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExportResult
+from opentelemetry.sdk.trace.export import BatchSpanProcessor, SimpleSpanProcessor, SpanExportResult
 from structlog.testing import capture_logs
 
 from genkit._core._environment import GENKIT_ENV, GenkitEnvironment
@@ -45,7 +45,6 @@ from genkit._core._telemetry._default_exporter import (
     extract_span_data,
     init_telemetry_server_exporter,
 )
-from genkit._core._telemetry._realtime_processor import RealtimeSpanProcessor
 from genkit._core._typing import TraceData
 
 # =============================================================================
@@ -53,36 +52,26 @@ from genkit._core._typing import TraceData
 # =============================================================================
 
 
-def test_create_span_processor_returns_realtime_in_dev() -> None:
-    """Test that RealtimeSpanProcessor is returned in dev mode."""
+def test_create_span_processor_is_simple_in_dev() -> None:
+    """add_custom_exporter in local exports on span end, not on start."""
     mock_exporter = MagicMock()
 
-    with mock.patch.dict(
-        os.environ,
-        {
-            GENKIT_ENV: GenkitEnvironment.DEV,
-        },
-    ):
+    with mock.patch.dict(os.environ, {GENKIT_ENV: GenkitEnvironment.DEV}):
         processor = create_span_processor(mock_exporter)
-        assert isinstance(processor, RealtimeSpanProcessor)
+        assert isinstance(processor, SimpleSpanProcessor)
 
 
-def test_create_span_processor_returns_batch_in_prod() -> None:
-    """Test that BatchSpanProcessor is returned in production mode."""
+def test_create_span_processor_is_batch_in_prod() -> None:
+    """add_custom_exporter in prod batches Cloud / APM exporters."""
     mock_exporter = MagicMock()
 
-    with mock.patch.dict(
-        os.environ,
-        {
-            GENKIT_ENV: GenkitEnvironment.PROD,
-        },
-    ):
+    with mock.patch.dict(os.environ, {GENKIT_ENV: GenkitEnvironment.PROD}):
         processor = create_span_processor(mock_exporter)
         assert isinstance(processor, BatchSpanProcessor)
 
 
-def test_create_span_processor_returns_batch_when_no_env_set() -> None:
-    """Test that BatchSpanProcessor is returned when no env is set (defaults to prod)."""
+def test_create_span_processor_is_batch_when_no_env_set() -> None:
+    """No GENKIT_ENV still batches."""
     mock_exporter = MagicMock()
 
     with mock.patch.dict(os.environ, clear=True):
