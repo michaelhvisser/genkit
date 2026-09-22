@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Plugin hangers for attaching exporters and opening spans."""
+"""Process tracer boot and the plugin span opener."""
 
 from __future__ import annotations
 
@@ -26,14 +26,11 @@ from opentelemetry import trace as trace_api
 from opentelemetry.context import Context
 from opentelemetry.instrumentation.logging import LoggingInstrumentor
 from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import SpanExporter
 from opentelemetry.trace import Link, NoOpTracer, NoOpTracerProvider, ProxyTracerProvider, Span, SpanKind
 from opentelemetry.util import types
 
 from genkit._core._logger import get_logger
 from genkit._core._telemetry._instrumentation import instrumentations
-
-from ._default_exporter import create_span_processor
 
 logger = get_logger(__name__)
 
@@ -61,28 +58,6 @@ def init_provider() -> TracerProvider:
 def is_placeholder_provider(provider: object) -> bool:
     """True when the global provider is still OTel's unset proxy / no-op."""
     return isinstance(provider, (ProxyTracerProvider, NoOpTracerProvider))
-
-
-def add_custom_exporter(exporter: SpanExporter | None, name: str = 'last') -> None:
-    """Attach a span exporter to the process-global tracer provider.
-
-    Uses the global provider if the app already registered one; otherwise
-    boots one. This does not turn tracing on. Call
-    ``configure_instrumentation`` so spans exist for the exporter to see.
-    Under ``genkit start``, ``Genkit()`` still owns the Developer UI HTTP
-    poster.
-    """
-    if exporter is None:
-        logger.warn(f'{name} exporter is None')
-        return
-
-    provider = init_provider()
-    try:
-        provider.add_span_processor(create_span_processor(exporter))
-        logger.debug(f'{name} exporter added successfully.')
-    except Exception:
-        logger.error(f'tracing.add_custom_exporter: failed to add exporter {name}')
-        logger.exception('Failed to add custom exporter')
 
 
 class PluginTracer:

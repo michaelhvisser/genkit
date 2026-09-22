@@ -15,16 +15,21 @@ import subprocess  # noqa: S404
 import sys
 import threading
 from collections.abc import Awaitable, Callable, Generator, Mapping
+from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any, TypeVar
-from unittest.mock import MagicMock
+from unittest.mock import patch
 
 import pytest
+from genkit_google_cloud.telemetry.tracing import (
+    _reset_google_cloud_telemetry,
+    enable_google_cloud_telemetry,
+)
 from genkit_otel import OtelInstrumentation
-from genkit_otel._exporters import add_custom_exporter, init_provider, tracer
+from genkit_otel._exporters import init_provider, tracer
 from httpx import ASGITransport, AsyncClient
 from opentelemetry import trace as trace_api
-from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
+from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import NoOpTracerProvider
@@ -89,22 +94,55 @@ async def _joke() -> str:
     return 'Why did the cat cross the road?'
 
 
+def _hang_exporter(exporter: InMemorySpanExporter) -> None:
+    provider = trace_api.get_tracer_provider()
+    assert isinstance(provider, TracerProvider)
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+
+
+@contextmanager
+def _cloud_enable(**kwargs: Any) -> Generator[InMemorySpanExporter, None, None]:
+    """enable_google_cloud_telemetry() with Cloud exporters that stay in memory."""
+    _reset_google_cloud_telemetry()
+    cloud = InMemorySpanExporter()
+    with (
+        patch('genkit_google_cloud.telemetry.config.GenkitGCPExporter'),
+        patch(
+            'genkit_google_cloud.telemetry.config.GcpAdjustingTraceExporter',
+            return_value=cloud,
+        ),
+        patch('genkit_google_cloud.telemetry.config.GoogleCloudResourceDetector'),
+        patch('genkit_google_cloud.telemetry.config.CloudMonitoringMetricsExporter'),
+        patch('genkit_google_cloud.telemetry.config.GenkitMetricExporter'),
+        patch('genkit_google_cloud.telemetry.config.PeriodicExportingMetricReader'),
+        patch('genkit_google_cloud.telemetry.config.metrics'),
+    ):
+        enable_google_cloud_telemetry(**kwargs)
+        yield cloud
+
+
 @pytest.fixture(autouse=True)
 def _isolate_telemetry(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]:
     """Each test starts with no providers, unset collector env, and its own tracer."""
     reset_instrumentation()
+    _reset_google_cloud_telemetry()
     monkeypatch.delenv(GENKIT_ENV, raising=False)
     monkeypatch.delenv('GENKIT_TELEMETRY_SERVER', raising=False)
     monkeypatch.setattr(Genkit, '_start_reflection_background', lambda self: None)
     isolated = TracerProvider()
     monkeypatch.setattr(trace_api, 'get_tracer_provider', lambda: isolated)
     monkeypatch.setattr(trace_api, 'set_tracer_provider', lambda _provider: None)
+    monkeypatch.setattr(
+        'genkit_google_cloud.telemetry.config.trace_api.get_tracer_provider',
+        lambda: isolated,
+    )
     path_token = parent_path_context.set('')
     try:
         yield
     finally:
         parent_path_context.reset(path_token)
         reset_instrumentation()
+        _reset_google_cloud_telemetry()
         isolated.shutdown()
 
 
@@ -165,10 +203,10 @@ async def test_configuring_otel_yourself_in_dev_stacks_dev_instrumentation(
 
 
 @pytest.mark.asyncio
-async def test_an_exporter_alone_does_not_create_spans() -> None:
-    """add_custom_exporter attaches exporters only; ids stay empty."""
+async def test_an_exporter_on_the_process_tracer_does_not_create_spans() -> None:
+    """An exporter on the process tracer without configure leaves ids empty."""
     exporter = InMemorySpanExporter()
-    add_custom_exporter(exporter, 'cloud-trace')
+    _hang_exporter(exporter)
     action = Action(name='joke', kind=ActionKind.FLOW, fn=_joke)
     result = await action.run()
 
@@ -210,15 +248,15 @@ async def test_dev_without_a_collector_stays_untraced(
 
 
 @pytest.mark.asyncio
-async def test_add_custom_exporter_after_genkit_does_not_turn_tracing_on(
+async def test_hanging_an_exporter_after_genkit_does_not_turn_tracing_on(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """add_custom_exporter after Genkit() does not turn tracing on; ids stay empty."""
+    """Hanging an exporter after Genkit() does not turn tracing on; ids stay empty."""
     monkeypatch.setenv(GENKIT_ENV, 'dev')
 
     Genkit()
     exporter = InMemorySpanExporter()
-    add_custom_exporter(exporter, 'developer-ui')
+    _hang_exporter(exporter)
     action = Action(name='joke', kind=ActionKind.FLOW, fn=_joke)
     result = await action.run()
 
@@ -230,67 +268,48 @@ async def test_add_custom_exporter_after_genkit_does_not_turn_tracing_on(
 @pytest.mark.asyncio
 async def test_enable_google_cloud_telemetry_is_enough() -> None:
     """enable_google_cloud_telemetry() is enough; you get real hex ids."""
-    exporter = InMemorySpanExporter()
-    add_custom_exporter(exporter, 'cloud-trace')
-    configure_instrumentation(OtelInstrumentation())
-    action = Action(name='joke', kind=ActionKind.FLOW, fn=_joke)
-    result = await action.run()
-    _force_flush()
+    with _cloud_enable() as cloud:
+        action = Action(name='joke', kind=ActionKind.FLOW, fn=_joke)
+        result = await action.run()
+        _force_flush()
 
-    assert is_instrumented_by(OtelInstrumentation)
-    assert _hex_id(result.trace_id, 32)
-    names = [span.name for span in exporter.get_finished_spans()]
-    assert 'joke' in names
+        assert is_instrumented_by(OtelInstrumentation)
+        assert _hex_id(result.trace_id, 32)
+        names = [span.name for span in cloud.get_finished_spans()]
+        assert 'joke' in names
 
 
 @pytest.mark.asyncio
-async def test_set_global_tracer_provider_then_add_exporter_gets_action_span() -> None:
-    """They already set the process tracer; add_custom_exporter sends Cloud there."""
-    cloud = InMemorySpanExporter()
-    add_custom_exporter(cloud, 'cloud-trace')
-    configure_instrumentation(OtelInstrumentation())
-
-    action = Action(name='joke', kind=ActionKind.FLOW, fn=_joke)
-    result = await action.run()
-    _force_flush()
-
-    assert _hex_id(result.trace_id, 32)
-    names = [span.name for span in cloud.get_finished_spans()]
-    assert 'joke' in names
-
-
-@pytest.mark.asyncio
-async def test_configure_otel_on_a_private_provider_then_add_exporter_does_not_send_that_action_to_cloud() -> None:
-    """Private OtelInstrumentation then an exporter: Cloud hangs on the global, so that action is not there."""
+async def test_configure_otel_on_a_private_provider_then_enable_does_not_send_that_action_to_cloud() -> None:
+    """Private OtelInstrumentation then enable(): Cloud hangs on the process tracer, so that action is not there."""
     private = TracerProvider()
-    cloud = InMemorySpanExporter()
     configure_instrumentation(OtelInstrumentation(tracer_provider=private))
-    add_custom_exporter(cloud, 'cloud-trace')
+    with _cloud_enable() as cloud:
+        action = Action(name='joke', kind=ActionKind.FLOW, fn=_joke)
+        result = await action.run()
+        _force_flush()
+        private.force_flush()
 
-    action = Action(name='joke', kind=ActionKind.FLOW, fn=_joke)
-    result = await action.run()
-    _force_flush()
-    private.force_flush()
-
-    assert _hex_id(result.trace_id, 32)
-    names = [span.name for span in cloud.get_finished_spans()]
-    assert 'joke' not in names
+        assert _hex_id(result.trace_id, 32)
+        names = [span.name for span in cloud.get_finished_spans()]
+        assert 'joke' not in names
     private.shutdown()
 
 
-def test_add_custom_exporter_when_global_cannot_attach_does_not_raise() -> None:
-    """Global attach failure stays a log line so enable stays fail-safe."""
+def test_enable_when_process_tracer_cannot_attach_does_not_raise() -> None:
+    """A dead process tracer stays a log line so enable() does not crash the process."""
     global_provider = trace_api.get_tracer_provider()
 
     def boom(_processor: object) -> None:
         raise RuntimeError('processor dead')
 
     global_provider.add_span_processor = boom  # type: ignore[method-assign]
-    add_custom_exporter(InMemorySpanExporter(), 'cloud-trace')
+    with _cloud_enable():
+        pass
 
 
-def test_add_custom_exporter_does_not_touch_a_private_provider_that_cannot_add() -> None:
-    """A dead tracer_provider= on OtelInstrumentation does not fail enable; Cloud still hangs on the global."""
+def test_enable_does_not_touch_a_private_provider_that_cannot_add() -> None:
+    """A dead tracer_provider= on OtelInstrumentation does not fail enable()."""
     private = TracerProvider()
 
     def boom(_processor: object) -> None:
@@ -298,7 +317,8 @@ def test_add_custom_exporter_does_not_touch_a_private_provider_that_cannot_add()
 
     private.add_span_processor = boom  # type: ignore[method-assign]
     configure_instrumentation(OtelInstrumentation(tracer_provider=private))
-    add_custom_exporter(InMemorySpanExporter(), 'cloud-trace')
+    with _cloud_enable():
+        pass
     private.shutdown()
 
 
@@ -331,8 +351,8 @@ async def test_enable_under_genkit_start_leaves_developer_ui_to_genkit(
     monkeypatch.setenv(GENKIT_ENV, 'dev')
     monkeypatch.setenv('GENKIT_TELEMETRY_SERVER', 'http://127.0.0.1:4033')
 
-    add_custom_exporter(InMemorySpanExporter(), 'cloud-trace')
-    assert not is_instrumented_by(OtelInstrumentation)
+    with _cloud_enable(force_dev_export=True):
+        assert not is_instrumented_by(OtelInstrumentation)
 
     Genkit()
     action = Action(name='joke', kind=ActionKind.FLOW, fn=_joke)
@@ -345,38 +365,6 @@ async def test_enable_under_genkit_start_leaves_developer_ui_to_genkit(
 
 def _handshake_server() -> ReflectionServerV2:
     return ReflectionServerV2(Registry(), 'ws://127.0.0.1:1')
-
-
-def _capture_handshake_exporters(monkeypatch: pytest.MonkeyPatch) -> list[object]:
-    seen: list[object] = []
-    real = add_custom_exporter
-
-    def capture(exporter: Any, name: str = 'last') -> None:
-        seen.append(exporter)
-        real(exporter, name)
-
-    monkeypatch.setattr('genkit_otel._exporters.add_custom_exporter', capture)
-    return seen
-
-
-def _span_for_export() -> MagicMock:
-    span = MagicMock(spec=ReadableSpan)
-    ctx = MagicMock()
-    ctx.trace_id = 1
-    ctx.span_id = 2
-    span.context = ctx
-    span.name = 'joke'
-    span.start_time = 1_000_000_000
-    span.end_time = 2_000_000_000
-    span.attributes = {}
-    span.parent = None
-    span.kind = trace_api.SpanKind.INTERNAL
-    status = MagicMock()
-    status.status_code = trace_api.StatusCode.OK
-    status.description = None
-    span.status = status
-    span.events = ()
-    return span
 
 
 def _start_collector() -> tuple[HTTPServer, list[str]]:
@@ -492,7 +480,7 @@ async def test_cloud_already_on_still_posts_handshake_traces_to_developer_ui(
     server, posts = _start_collector()
     url = f'http://127.0.0.1:{server.server_address[1]}'
     try:
-        add_custom_exporter(InMemorySpanExporter(), 'cloud-trace')
+        _hang_exporter(InMemorySpanExporter())
         configure_instrumentation(OtelInstrumentation())
         assert is_instrumented_by(OtelInstrumentation)
 

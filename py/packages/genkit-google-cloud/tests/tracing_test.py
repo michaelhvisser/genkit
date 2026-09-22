@@ -28,6 +28,8 @@ from genkit_google_cloud.telemetry.tracing import (
     enable_google_cloud_telemetry,
 )
 from genkit_otel import OtelInstrumentation
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor, SimpleSpanProcessor
 
 from genkit._core._error import GenkitError
 from genkit._core._telemetry._instrumentation import instrumentations, is_instrumented_by, reset_instrumentation
@@ -55,7 +57,7 @@ def test_enable_google_cloud_telemetry_wraps_with_gcp_adjusting_exporter() -> No
         mock.patch.dict(os.environ, {_GENKIT_ENV: _ENV_PROD}, clear=False),
         patch('genkit_google_cloud.telemetry.config.GenkitGCPExporter') as mock_gcp_exporter,
         patch('genkit_google_cloud.telemetry.config.GcpAdjustingTraceExporter') as mock_adjusting,
-        patch('genkit_google_cloud.telemetry.config.add_custom_exporter') as mock_add_exporter,
+        patch('genkit_google_cloud.telemetry.config._hang_exporter_on_process_tracer') as mock_add_exporter,
         patch('genkit_google_cloud.telemetry.config.GoogleCloudResourceDetector'),
         patch('genkit_google_cloud.telemetry.config.CloudMonitoringMetricsExporter'),
         patch('genkit_google_cloud.telemetry.config.GenkitMetricExporter'),
@@ -87,7 +89,7 @@ def test_enable_google_cloud_telemetry_wraps_with_gcp_adjusting_exporter() -> No
         assert call_kwargs['project_id'] is None
 
         # Verify the wrapped exporter was added
-        mock_add_exporter.assert_called_once_with(mock_wrapped_exporter, 'gcp_telemetry_server')
+        mock_add_exporter.assert_called_once_with(exporter=mock_wrapped_exporter)
 
 
 def test_enable_google_cloud_telemetry_with_log_input_and_output_enabled() -> None:
@@ -96,7 +98,7 @@ def test_enable_google_cloud_telemetry_with_log_input_and_output_enabled() -> No
         mock.patch.dict(os.environ, {_GENKIT_ENV: _ENV_PROD}),
         patch('genkit_google_cloud.telemetry.config.GenkitGCPExporter'),
         patch('genkit_google_cloud.telemetry.config.GcpAdjustingTraceExporter') as mock_adjusting,
-        patch('genkit_google_cloud.telemetry.config.add_custom_exporter'),
+        patch('genkit_google_cloud.telemetry.config._hang_exporter_on_process_tracer'),
         patch('genkit_google_cloud.telemetry.config.GoogleCloudResourceDetector'),
         patch('genkit_google_cloud.telemetry.config.CloudMonitoringMetricsExporter'),
         patch('genkit_google_cloud.telemetry.config.GenkitMetricExporter'),
@@ -117,7 +119,7 @@ def test_enable_google_cloud_telemetry_with_project_id() -> None:
         mock.patch.dict(os.environ, {_GENKIT_ENV: _ENV_PROD}),
         patch('genkit_google_cloud.telemetry.config.GenkitGCPExporter'),
         patch('genkit_google_cloud.telemetry.config.GcpAdjustingTraceExporter') as mock_adjusting,
-        patch('genkit_google_cloud.telemetry.config.add_custom_exporter'),
+        patch('genkit_google_cloud.telemetry.config._hang_exporter_on_process_tracer'),
         patch('genkit_google_cloud.telemetry.config.GoogleCloudResourceDetector'),
         patch('genkit_google_cloud.telemetry.config.CloudMonitoringMetricsExporter'),
         patch('genkit_google_cloud.telemetry.config.GenkitMetricExporter'),
@@ -137,7 +139,7 @@ def test_enable_google_cloud_telemetry_skips_in_dev_without_force() -> None:
     with (
         mock.patch.dict(os.environ, {_GENKIT_ENV: _ENV_DEV}),
         patch('genkit_google_cloud.telemetry.config.GenkitGCPExporter') as mock_gcp_exporter,
-        patch('genkit_google_cloud.telemetry.config.add_custom_exporter') as mock_add_exporter,
+        patch('genkit_google_cloud.telemetry.config._hang_exporter_on_process_tracer') as mock_add_exporter,
     ):
         # Call without force_dev_export (using legacy force_export)
         enable_google_cloud_telemetry(force_dev_export=False)
@@ -154,7 +156,7 @@ def test_enable_google_cloud_telemetry_exports_in_dev_with_force() -> None:
         mock.patch.dict(os.environ, {_GENKIT_ENV: _ENV_DEV}),
         patch('genkit_google_cloud.telemetry.config.GenkitGCPExporter') as mock_gcp_exporter,
         patch('genkit_google_cloud.telemetry.config.GcpAdjustingTraceExporter'),
-        patch('genkit_google_cloud.telemetry.config.add_custom_exporter') as mock_add_exporter,
+        patch('genkit_google_cloud.telemetry.config._hang_exporter_on_process_tracer') as mock_add_exporter,
         patch('genkit_google_cloud.telemetry.config.GoogleCloudResourceDetector'),
         patch('genkit_google_cloud.telemetry.config.CloudMonitoringMetricsExporter'),
         patch('genkit_google_cloud.telemetry.config.GenkitMetricExporter'),
@@ -173,7 +175,7 @@ def test_enable_google_cloud_telemetry_disable_traces() -> None:
     with (
         mock.patch.dict(os.environ, {_GENKIT_ENV: _ENV_PROD}),
         patch('genkit_google_cloud.telemetry.config.GenkitGCPExporter') as mock_gcp_exporter,
-        patch('genkit_google_cloud.telemetry.config.add_custom_exporter') as mock_add_exporter,
+        patch('genkit_google_cloud.telemetry.config._hang_exporter_on_process_tracer') as mock_add_exporter,
         patch('genkit_google_cloud.telemetry.config.GoogleCloudResourceDetector'),
         patch('genkit_google_cloud.telemetry.config.CloudMonitoringMetricsExporter'),
         patch('genkit_google_cloud.telemetry.config.GenkitMetricExporter'),
@@ -195,7 +197,7 @@ def test_enable_google_cloud_telemetry_disable_metrics() -> None:
         mock.patch.dict(os.environ, {_GENKIT_ENV: _ENV_PROD}),
         patch('genkit_google_cloud.telemetry.config.GenkitGCPExporter'),
         patch('genkit_google_cloud.telemetry.config.GcpAdjustingTraceExporter'),
-        patch('genkit_google_cloud.telemetry.config.add_custom_exporter'),
+        patch('genkit_google_cloud.telemetry.config._hang_exporter_on_process_tracer'),
         patch('genkit_google_cloud.telemetry.config.GoogleCloudResourceDetector') as mock_detector,
         patch('genkit_google_cloud.telemetry.config.CloudMonitoringMetricsExporter') as mock_metric_exp,
         patch('genkit_google_cloud.telemetry.config.GenkitMetricExporter') as mock_genkit_metric,
@@ -218,7 +220,7 @@ def test_enable_google_cloud_telemetry_custom_metric_interval() -> None:
         mock.patch.dict(os.environ, {_GENKIT_ENV: _ENV_PROD}),
         patch('genkit_google_cloud.telemetry.config.GenkitGCPExporter'),
         patch('genkit_google_cloud.telemetry.config.GcpAdjustingTraceExporter'),
-        patch('genkit_google_cloud.telemetry.config.add_custom_exporter'),
+        patch('genkit_google_cloud.telemetry.config._hang_exporter_on_process_tracer'),
         patch('genkit_google_cloud.telemetry.config.GoogleCloudResourceDetector'),
         patch('genkit_google_cloud.telemetry.config.CloudMonitoringMetricsExporter'),
         patch('genkit_google_cloud.telemetry.config.GenkitMetricExporter'),
@@ -241,7 +243,7 @@ def test_enable_google_cloud_telemetry_enforces_minimum_interval() -> None:
         mock.patch.dict(os.environ, {_GENKIT_ENV: _ENV_PROD}),
         patch('genkit_google_cloud.telemetry.config.GenkitGCPExporter'),
         patch('genkit_google_cloud.telemetry.config.GcpAdjustingTraceExporter'),
-        patch('genkit_google_cloud.telemetry.config.add_custom_exporter'),
+        patch('genkit_google_cloud.telemetry.config._hang_exporter_on_process_tracer'),
         patch('genkit_google_cloud.telemetry.config.GoogleCloudResourceDetector'),
         patch('genkit_google_cloud.telemetry.config.CloudMonitoringMetricsExporter'),
         patch('genkit_google_cloud.telemetry.config.GenkitMetricExporter'),
@@ -310,7 +312,7 @@ def test_legacy_force_export_parameter() -> None:
         mock.patch.dict(os.environ, {_GENKIT_ENV: _ENV_DEV}),
         patch('genkit_google_cloud.telemetry.config.GenkitGCPExporter') as mock_gcp_exporter,
         patch('genkit_google_cloud.telemetry.config.GcpAdjustingTraceExporter'),
-        patch('genkit_google_cloud.telemetry.config.add_custom_exporter'),
+        patch('genkit_google_cloud.telemetry.config._hang_exporter_on_process_tracer'),
         patch('genkit_google_cloud.telemetry.config.GoogleCloudResourceDetector'),
         patch('genkit_google_cloud.telemetry.config.CloudMonitoringMetricsExporter'),
         patch('genkit_google_cloud.telemetry.config.GenkitMetricExporter'),
@@ -356,7 +358,7 @@ def test_enable_google_cloud_telemetry_called_twice_raises() -> None:
         mock.patch.dict(os.environ, {_GENKIT_ENV: _ENV_PROD}, clear=False),
         patch('genkit_google_cloud.telemetry.config.GenkitGCPExporter'),
         patch('genkit_google_cloud.telemetry.config.GcpAdjustingTraceExporter'),
-        patch('genkit_google_cloud.telemetry.config.add_custom_exporter') as mock_add_exporter,
+        patch('genkit_google_cloud.telemetry.config._hang_exporter_on_process_tracer') as mock_add_exporter,
         patch('genkit_google_cloud.telemetry.config.GoogleCloudResourceDetector'),
         patch('genkit_google_cloud.telemetry.config.CloudMonitoringMetricsExporter'),
         patch('genkit_google_cloud.telemetry.config.GenkitMetricExporter'),
@@ -375,7 +377,7 @@ def test_enable_in_dev_without_force_then_again_raises() -> None:
     """First enable in local skips Cloud; a second enable still raises."""
     with (
         mock.patch.dict(os.environ, {_GENKIT_ENV: _ENV_DEV}),
-        patch('genkit_google_cloud.telemetry.config.add_custom_exporter') as mock_add_exporter,
+        patch('genkit_google_cloud.telemetry.config._hang_exporter_on_process_tracer') as mock_add_exporter,
     ):
         enable_google_cloud_telemetry(force_dev_export=False)
         mock_add_exporter.assert_not_called()
@@ -390,7 +392,7 @@ def test_enable_in_prod_installs_otel() -> None:
         mock.patch.dict(os.environ, {_GENKIT_ENV: _ENV_PROD}, clear=False),
         patch('genkit_google_cloud.telemetry.config.GenkitGCPExporter'),
         patch('genkit_google_cloud.telemetry.config.GcpAdjustingTraceExporter'),
-        patch('genkit_google_cloud.telemetry.config.add_custom_exporter'),
+        patch('genkit_google_cloud.telemetry.config._hang_exporter_on_process_tracer'),
         patch('genkit_google_cloud.telemetry.config.GoogleCloudResourceDetector'),
         patch('genkit_google_cloud.telemetry.config.CloudMonitoringMetricsExporter'),
         patch('genkit_google_cloud.telemetry.config.GenkitMetricExporter'),
@@ -409,7 +411,7 @@ def test_enable_does_not_add_a_second_otel_when_already_configured() -> None:
         mock.patch.dict(os.environ, {_GENKIT_ENV: _ENV_PROD}, clear=False),
         patch('genkit_google_cloud.telemetry.config.GenkitGCPExporter'),
         patch('genkit_google_cloud.telemetry.config.GcpAdjustingTraceExporter'),
-        patch('genkit_google_cloud.telemetry.config.add_custom_exporter'),
+        patch('genkit_google_cloud.telemetry.config._hang_exporter_on_process_tracer'),
         patch('genkit_google_cloud.telemetry.config.GoogleCloudResourceDetector'),
         patch('genkit_google_cloud.telemetry.config.CloudMonitoringMetricsExporter'),
         patch('genkit_google_cloud.telemetry.config.GenkitMetricExporter'),
@@ -430,7 +432,7 @@ def test_stale_collector_env_in_prod_still_installs_otel() -> None:
         ),
         patch('genkit_google_cloud.telemetry.config.GenkitGCPExporter'),
         patch('genkit_google_cloud.telemetry.config.GcpAdjustingTraceExporter'),
-        patch('genkit_google_cloud.telemetry.config.add_custom_exporter'),
+        patch('genkit_google_cloud.telemetry.config._hang_exporter_on_process_tracer'),
         patch('genkit_google_cloud.telemetry.config.GoogleCloudResourceDetector'),
         patch('genkit_google_cloud.telemetry.config.CloudMonitoringMetricsExporter'),
         patch('genkit_google_cloud.telemetry.config.GenkitMetricExporter'),
@@ -451,7 +453,7 @@ def test_enable_under_genkit_start_does_not_install_otel() -> None:
         ),
         patch('genkit_google_cloud.telemetry.config.GenkitGCPExporter'),
         patch('genkit_google_cloud.telemetry.config.GcpAdjustingTraceExporter'),
-        patch('genkit_google_cloud.telemetry.config.add_custom_exporter'),
+        patch('genkit_google_cloud.telemetry.config._hang_exporter_on_process_tracer'),
         patch('genkit_google_cloud.telemetry.config.GoogleCloudResourceDetector'),
         patch('genkit_google_cloud.telemetry.config.CloudMonitoringMetricsExporter'),
         patch('genkit_google_cloud.telemetry.config.GenkitMetricExporter'),
@@ -460,3 +462,62 @@ def test_enable_under_genkit_start_does_not_install_otel() -> None:
     ):
         enable_google_cloud_telemetry(force_dev_export=True, project_id='my-project')
         assert not is_instrumented_by(OtelInstrumentation)
+
+
+def _processors(provider: TracerProvider) -> tuple[object, ...]:
+    active = getattr(provider, '_active_span_processor', None)
+    if active is None:
+        return ()
+    return tuple(getattr(active, '_span_processors', (active,)))
+
+
+def test_enable_in_prod_batches_cloud_spans() -> None:
+    """enable() in prod hangs Cloud Trace on a batch processor."""
+    isolated = TracerProvider()
+    try:
+        with (
+            mock.patch.dict(os.environ, {_GENKIT_ENV: _ENV_PROD}, clear=False),
+            patch(
+                'genkit_google_cloud.telemetry.config.trace_api.get_tracer_provider',
+                return_value=isolated,
+            ),
+            patch('genkit_google_cloud.telemetry.config.GenkitGCPExporter'),
+            patch('genkit_google_cloud.telemetry.config.GcpAdjustingTraceExporter'),
+            patch('genkit_google_cloud.telemetry.config.GoogleCloudResourceDetector'),
+            patch('genkit_google_cloud.telemetry.config.CloudMonitoringMetricsExporter'),
+            patch('genkit_google_cloud.telemetry.config.GenkitMetricExporter'),
+            patch('genkit_google_cloud.telemetry.config.PeriodicExportingMetricReader'),
+            patch('genkit_google_cloud.telemetry.config.metrics'),
+        ):
+            enable_google_cloud_telemetry(project_id='my-project')
+        assert any(isinstance(proc, BatchSpanProcessor) for proc in _processors(isolated))
+    finally:
+        isolated.shutdown()
+
+
+def test_enable_under_genkit_start_with_force_exports_on_span_end() -> None:
+    """force_dev_export=True under genkit start exports Cloud on span end."""
+    isolated = TracerProvider()
+    try:
+        with (
+            mock.patch.dict(
+                os.environ,
+                {_GENKIT_ENV: _ENV_DEV, 'GENKIT_TELEMETRY_SERVER': 'http://127.0.0.1:4033'},
+                clear=False,
+            ),
+            patch(
+                'genkit_google_cloud.telemetry.config.trace_api.get_tracer_provider',
+                return_value=isolated,
+            ),
+            patch('genkit_google_cloud.telemetry.config.GenkitGCPExporter'),
+            patch('genkit_google_cloud.telemetry.config.GcpAdjustingTraceExporter'),
+            patch('genkit_google_cloud.telemetry.config.GoogleCloudResourceDetector'),
+            patch('genkit_google_cloud.telemetry.config.CloudMonitoringMetricsExporter'),
+            patch('genkit_google_cloud.telemetry.config.GenkitMetricExporter'),
+            patch('genkit_google_cloud.telemetry.config.PeriodicExportingMetricReader'),
+            patch('genkit_google_cloud.telemetry.config.metrics'),
+        ):
+            enable_google_cloud_telemetry(force_dev_export=True, project_id='my-project')
+        assert any(isinstance(proc, SimpleSpanProcessor) for proc in _processors(isolated))
+    finally:
+        isolated.shutdown()

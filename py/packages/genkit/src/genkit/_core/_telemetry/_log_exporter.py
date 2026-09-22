@@ -16,7 +16,7 @@ import os
 import threading
 import time
 from queue import Empty, Full, Queue
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 import httpx
 
@@ -70,6 +70,19 @@ _skip_export = threading.local()
 _atexit_registered = False
 
 
+def resolve_telemetry_server_url(*, telemetry_server_url: str, telemetry_server_endpoint: str) -> str:
+    """A typo'd collector URL should fail when export starts, not as missing Dev UI rows later."""
+    url = telemetry_server_url.strip()
+    try:
+        joined = urljoin(url, telemetry_server_endpoint)
+    except ValueError as error:
+        raise ValueError(f'invalid telemetry server URL {telemetry_server_url!r}') from error
+    parsed = urlparse(joined)
+    if parsed.scheme not in ('http', 'https') or not parsed.netloc:
+        raise ValueError(f'invalid telemetry server URL {telemetry_server_url!r}')
+    return url
+
+
 def logs_opted_out() -> bool:
     """True only when ``GENKIT_OTEL_ENABLE_LOGS`` is a ParseBool false."""
     raw = os.environ.get(GENKIT_OTEL_ENABLE_LOGS, '').strip().lower()
@@ -87,8 +100,6 @@ def enable_log_export(*, url: str) -> None:
     global _exporter
     if not url or logs_opted_out() or not is_dev_environment():
         return
-    from genkit._core._telemetry._telemetry_url import resolve_telemetry_server_url
-
     try:
         resolved = resolve_telemetry_server_url(
             telemetry_server_url=url,

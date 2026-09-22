@@ -12,7 +12,6 @@ from collections.abc import Generator, Sequence
 
 import pytest
 from genkit_otel import OtelInstrumentation
-from genkit_otel._exporters import add_custom_exporter
 from opentelemetry import trace as trace_api
 from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
@@ -26,7 +25,6 @@ from genkit._core._error import GenkitError
 from genkit._core._telemetry._attrs import metadata_key
 from genkit._core._telemetry._instrumentation import (
     SpanMetadata,
-    is_instrumented_by,
     parent_path_context,
     reset_instrumentation,
     run_in_new_span,
@@ -62,13 +60,6 @@ def exporter() -> Generator[InMemorySpanExporter, None, None]:
     finally:
         exp.clear()
         reset_instrumentation()
-
-
-def test_add_custom_exporter_does_not_register_renderer() -> None:
-    """add_custom_exporter alone does not turn tracing on."""
-    reset_instrumentation()
-    add_custom_exporter(InMemorySpanExporter(), 'test')
-    assert not is_instrumented_by(OtelInstrumentation)
 
 
 def _by_name(spans: Sequence[ReadableSpan], name: str) -> ReadableSpan:
