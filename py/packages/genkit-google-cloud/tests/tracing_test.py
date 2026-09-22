@@ -17,7 +17,6 @@
 """What enable_google_cloud_telemetry() does to Cloud Trace and the Developer UI."""
 
 import os
-import warnings
 from collections.abc import Generator
 from unittest import mock
 from unittest.mock import MagicMock, patch
@@ -26,7 +25,6 @@ import pytest
 from genkit_google_cloud.telemetry.config import resolve_project_id
 from genkit_google_cloud.telemetry.tracing import (
     _reset_google_cloud_telemetry,
-    add_gcp_telemetry,
     enable_google_cloud_telemetry,
 )
 from genkit_otel import OtelInstrumentation
@@ -332,28 +330,6 @@ def test_legacy_force_export_parameter() -> None:
         mock_gcp_exporter.assert_called_once()
 
 
-def test_add_gcp_telemetry_deprecated_alias() -> None:
-    """add_gcp_telemetry() warns and calls enable_google_cloud_telemetry()."""
-    with (
-        mock.patch.dict(os.environ, {_GENKIT_ENV: _ENV_PROD}, clear=False),
-        patch('genkit_google_cloud.telemetry.config.GenkitGCPExporter') as mock_gcp_exporter,
-        patch('genkit_google_cloud.telemetry.config.GcpAdjustingTraceExporter'),
-        patch('genkit_google_cloud.telemetry.config.add_custom_exporter'),
-        patch('genkit_google_cloud.telemetry.config.GoogleCloudResourceDetector'),
-        patch('genkit_google_cloud.telemetry.config.CloudMonitoringMetricsExporter'),
-        patch('genkit_google_cloud.telemetry.config.GenkitMetricExporter'),
-        patch('genkit_google_cloud.telemetry.config.PeriodicExportingMetricReader'),
-        patch('genkit_google_cloud.telemetry.config.metrics'),
-    ):
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter('always', DeprecationWarning)
-            add_gcp_telemetry()
-
-        assert len(caught) == 1
-        assert 'add_gcp_telemetry is deprecated' in str(caught[0].message)
-        mock_gcp_exporter.assert_called_once()
-
-
 def test_enable_google_cloud_telemetry_is_fail_safe() -> None:
     """A Cloud Trace auth failure does not crash the process."""
     with (
@@ -392,27 +368,6 @@ def test_enable_google_cloud_telemetry_called_twice_raises() -> None:
         with pytest.raises(GenkitError, match='already called') as raised:
             enable_google_cloud_telemetry(project_id='other')
         assert raised.value.status == 'FAILED_PRECONDITION'
-        mock_add_exporter.assert_called_once()
-
-
-def test_add_gcp_telemetry_after_enable_raises() -> None:
-    """add_gcp_telemetry() after enable_google_cloud_telemetry() is the same second call."""
-    with (
-        mock.patch.dict(os.environ, {_GENKIT_ENV: _ENV_PROD}, clear=False),
-        patch('genkit_google_cloud.telemetry.config.GenkitGCPExporter'),
-        patch('genkit_google_cloud.telemetry.config.GcpAdjustingTraceExporter'),
-        patch('genkit_google_cloud.telemetry.config.add_custom_exporter') as mock_add_exporter,
-        patch('genkit_google_cloud.telemetry.config.GoogleCloudResourceDetector'),
-        patch('genkit_google_cloud.telemetry.config.CloudMonitoringMetricsExporter'),
-        patch('genkit_google_cloud.telemetry.config.GenkitMetricExporter'),
-        patch('genkit_google_cloud.telemetry.config.PeriodicExportingMetricReader'),
-        patch('genkit_google_cloud.telemetry.config.metrics'),
-    ):
-        enable_google_cloud_telemetry(project_id='my-project')
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore', DeprecationWarning)
-            with pytest.raises(GenkitError, match='already called'):
-                add_gcp_telemetry(project_id='other')
         mock_add_exporter.assert_called_once()
 
 
