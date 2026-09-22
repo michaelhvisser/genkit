@@ -16,8 +16,8 @@
 
 """OpenTelemetry backend for Genkit traces.
 
-Application code should call :class:`genkit.Genkit`. Use this package
-when you want Cloud Trace or your own OpenTelemetry provider.
+If they already set the process tracer, this mints Genkit spans there.
+Cloud Trace is ``enable_google_cloud_telemetry()``.
 
 Example:
     from genkit.telemetry import configure_instrumentation

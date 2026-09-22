@@ -39,8 +39,6 @@ from collections.abc import Awaitable, Callable, Coroutine
 from typing import Any
 
 import websockets
-from opentelemetry import trace as trace_api
-from opentelemetry.sdk.trace import TracerProvider
 from pydantic import BaseModel, JsonValue, ValidationError
 from websockets.exceptions import ConnectionClosed
 
@@ -53,6 +51,7 @@ from genkit._core._middleware import GenerateMiddleware
 from genkit._core._model import AgentInput, ModelRef
 from genkit._core._reflection import as_agent_input_dict, resolve_agent_init
 from genkit._core._registry import Registry
+from genkit._core._telemetry._instrumentation import flush_instrumentations
 from genkit._core._telemetry._log_exporter import enable_log_export
 from genkit._core._telemetry.http import connect_developer_ui_collector
 from genkit._core._typing import (
@@ -414,9 +413,7 @@ class ReflectionServerV2:
         stream.close()
 
     async def flush_tracing(self) -> None:
-        provider = trace_api.get_tracer_provider()
-        if isinstance(provider, TracerProvider):
-            await asyncio.to_thread(provider.force_flush)
+        await asyncio.to_thread(flush_instrumentations)
 
     @staticmethod
     def run_action_call_options(

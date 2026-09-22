@@ -19,7 +19,6 @@ from queue import Empty, Full, Queue
 from urllib.parse import urljoin
 
 import httpx
-from opentelemetry import trace as trace_api
 
 from genkit._core._constants import GENKIT_VERSION
 from genkit._core._environment import is_dev_environment
@@ -88,8 +87,7 @@ def enable_log_export(*, url: str) -> None:
     global _exporter
     if not url or logs_opted_out() or not is_dev_environment():
         return
-    # Late import: _default_exporter pulls get_logger, and get_logger tees here.
-    from genkit._core._telemetry._default_exporter import resolve_telemetry_server_url
+    from genkit._core._telemetry._telemetry_url import resolve_telemetry_server_url
 
     try:
         resolved = resolve_telemetry_server_url(
@@ -140,11 +138,12 @@ def build_log_record(*, level: int, event: str, attrs: dict[str, object]) -> dic
     }
     if dropped:
         record['droppedAttributesCount'] = dropped
-    span = trace_api.get_current_span()
-    ctx = span.get_span_context()
-    if ctx is not None and ctx.is_valid:
-        record['traceId'] = format(ctx.trace_id, '032x')
-        record['spanId'] = format(ctx.span_id, '016x')
+    from genkit._core._telemetry._instrumentation import current_span
+
+    span = current_span.get()
+    if span is not None and span.trace_id and span.span_id:
+        record['traceId'] = span.trace_id
+        record['spanId'] = span.span_id
     return record
 
 

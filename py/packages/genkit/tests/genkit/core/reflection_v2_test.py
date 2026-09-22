@@ -42,6 +42,7 @@ from typing import Any
 import pytest
 import pytest_asyncio
 from genkit_otel import OtelInstrumentation
+from genkit_otel._exporters import init_provider
 from pydantic import BaseModel, Field
 from websockets.asyncio.server import serve
 
@@ -56,7 +57,6 @@ from genkit._core._reflection_v2 import (
     ReflectionServerV2,
 )
 from genkit._core._registry import Registry
-from genkit._core._telemetry._exporters import init_provider
 from genkit._core._telemetry._instrumentation import reset_instrumentation
 from genkit._core._typing import ReflectionRunActionParams
 from genkit.model import model_ref

@@ -1,6 +1,6 @@
 # genkit-otel
 
-Set up a global tracer provider following the [OpenTelemetry Python SDK](https://opentelemetry.io/docs/languages/python/instrumentation/) documentation, then register Genkit instrumentation:
+If they already set the process tracer, turn Genkit spans on with:
 
 ```python
 from genkit.telemetry import configure_instrumentation
@@ -9,6 +9,6 @@ from genkit_otel import OtelInstrumentation
 configure_instrumentation(OtelInstrumentation())
 ```
 
-Pass `tracer_provider` to `OtelInstrumentation` to use an explicit provider instead of the process-global provider.
+Pass `tracer_provider` to mint on that provider instead of the process-global one.
 
-`genkit start` records to the Developer UI without this package.
+Cloud Trace is `enable_google_cloud_telemetry()` from `genkit_google_cloud`. `genkit start` records to the Developer UI without this package. `pip install genkit` does not install OpenTelemetry.

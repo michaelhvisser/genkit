@@ -18,6 +18,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 from genkit_otel import OtelInstrumentation
+from genkit_otel._exporters import init_provider
 from structlog.testing import capture_logs
 
 from genkit._core._constants import GENKIT_VERSION
@@ -26,7 +27,6 @@ from genkit._core._logger import configure_structlog_level, get_logger, is_debug
 from genkit._core._reflection_v2 import ReflectionServerV2
 from genkit._core._registry import Registry
 from genkit._core._telemetry import _log_exporter as log_exporter
-from genkit._core._telemetry._exporters import init_provider
 from genkit._core._telemetry._instrumentation import reset_instrumentation, run_in_new_span
 from genkit._core._telemetry._log_exporter import (
     BATCH_DELAY_S,

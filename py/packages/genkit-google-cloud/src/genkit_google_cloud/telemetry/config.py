@@ -28,6 +28,7 @@ from typing import Any
 
 import structlog
 from genkit_otel import OtelInstrumentation
+from genkit_otel._exporters import add_custom_exporter
 from opentelemetry import metrics
 from opentelemetry.exporter.cloud_monitoring import CloudMonitoringMetricsExporter
 from opentelemetry.resourcedetector.gcp_resource_detector import GoogleCloudResourceDetector
@@ -38,7 +39,7 @@ from opentelemetry.sdk.trace.sampling import Sampler
 from opentelemetry.trace import get_current_span, span as trace_span
 
 from genkit._core._telemetry._instrumentation import is_instrumented_by
-from genkit.plugin_api import add_custom_exporter, is_dev_environment
+from genkit.plugin_api import is_dev_environment
 from genkit.telemetry import configure_instrumentation
 
 from .constants import (

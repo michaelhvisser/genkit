@@ -41,6 +41,8 @@ from pydantic import BaseModel
 from genkit._core._compat import override
 from genkit._core._environment import is_dev_environment
 from genkit._core._logger import get_logger
+from genkit._core._telemetry._attrs import Attr, Subtype
+from genkit._core._telemetry._telemetry_url import resolve_telemetry_server_url
 from genkit._core._typing import (
     Annotation,
     InstrumentationLibrary,
@@ -50,8 +52,6 @@ from genkit._core._typing import (
     TimeEvents,
     TraceData,
 )
-
-from ._attrs import Attr, Subtype
 
 logger = get_logger(__name__)
 
@@ -78,19 +78,6 @@ def post_trace(*, url: str, body: str) -> None:
     )
     with urllib.request.urlopen(request, timeout=EXPORT_TIMEOUT_SECONDS) as response:  # noqa: S310
         response.read()
-
-
-def resolve_telemetry_server_url(*, telemetry_server_url: str, telemetry_server_endpoint: str) -> str:
-    """A typo'd collector URL should fail when tracing starts, not as missing Dev UI traces later."""
-    url = telemetry_server_url.strip()
-    try:
-        joined = urljoin(url, telemetry_server_endpoint)
-    except ValueError as error:
-        raise ValueError(f'invalid telemetry server URL {telemetry_server_url!r}') from error
-    parsed = urlparse(joined)
-    if parsed.scheme not in ('http', 'https') or not parsed.netloc:
-        raise ValueError(f'invalid telemetry server URL {telemetry_server_url!r}')
-    return url
 
 
 def _ns_to_ms(ns: int | None) -> float:

@@ -19,9 +19,9 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any, TypeVar
 from unittest.mock import MagicMock
 
-import genkit_otel
 import pytest
 from genkit_otel import OtelInstrumentation
+from genkit_otel._exporters import add_custom_exporter, init_provider, tracer
 from httpx import ASGITransport, AsyncClient
 from opentelemetry import trace as trace_api
 from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
@@ -29,13 +29,12 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import NoOpTracerProvider
 
-from genkit import ActionKind, Genkit, plugin_api, telemetry
+from genkit import ActionKind, Genkit
 from genkit._core._action import Action
 from genkit._core._environment import GENKIT_ENV
 from genkit._core._reflection import create_reflection_asgi_app
 from genkit._core._reflection_v2 import ReflectionServerV2
 from genkit._core._registry import Registry
-from genkit._core._telemetry._exporters import init_provider
 from genkit._core._telemetry._instrumentation import (
     Instrumentation,
     NoopSpanContext,
@@ -54,7 +53,6 @@ from genkit._core._telemetry.http import (
     GenkitBuiltinInstrumentation,
     flush_direct_http_instrumentations,
 )
-from genkit.plugin_api import add_custom_exporter, tracer
 from genkit.telemetry import configure_instrumentation
 
 T = TypeVar('T')
@@ -108,24 +106,6 @@ def _isolate_telemetry(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None,
         parent_path_context.reset(path_token)
         reset_instrumentation()
         isolated.shutdown()
-
-
-def test_otel_instrumentation_imports_from_genkit_otel_not_genkit_telemetry() -> None:
-    """from genkit.telemetry import OtelInstrumentation fails; the backend is genkit_otel."""
-    assert 'OtelInstrumentation' not in telemetry.__all__
-    assert not hasattr(telemetry, 'OtelInstrumentation')
-
-
-def test_plugin_api_exports_tracer_and_add_custom_exporter() -> None:
-    """from genkit.plugin_api import tracer; those names are not on genkit_otel."""
-    assert 'tracer' in plugin_api.__all__
-    assert 'add_custom_exporter' in plugin_api.__all__
-    assert 'tracer' not in genkit_otel.__all__
-    assert 'add_custom_exporter' not in genkit_otel.__all__
-    assert 'maybe_configure_otel_for_exporters' not in genkit_otel.__all__
-    assert not hasattr(genkit_otel, 'tracer')
-    assert not hasattr(genkit_otel, 'add_custom_exporter')
-    assert not hasattr(genkit_otel, 'maybe_configure_otel_for_exporters')
 
 
 def test_configure_instrumentation_accepts_otel_from_genkit_otel() -> None:
@@ -335,7 +315,7 @@ def test_init_provider_does_not_rewrite_log_format(monkeypatch: pytest.MonkeyPat
             seen['set_logging_format'] = set_logging_format
 
     monkeypatch.setattr(
-        'genkit._core._telemetry._exporters.LoggingInstrumentor',
+        'genkit_otel._exporters.LoggingInstrumentor',
         FakeInstrumentor,
     )
     init_provider()
@@ -375,7 +355,7 @@ def _capture_handshake_exporters(monkeypatch: pytest.MonkeyPatch) -> list[object
         seen.append(exporter)
         real(exporter, name)
 
-    monkeypatch.setattr('genkit._core._telemetry._exporters.add_custom_exporter', capture)
+    monkeypatch.setattr('genkit_otel._exporters.add_custom_exporter', capture)
     return seen
 
 
@@ -529,16 +509,16 @@ async def test_cloud_already_on_still_posts_handshake_traces_to_developer_ui(
 
 
 @pytest.mark.asyncio
-async def test_imagen_tracer_does_not_record_when_tracing_is_off() -> None:
-    """Imagen's plugin_api.tracer opens a no-op span when nothing is configured."""
+async def test_tracer_does_not_record_when_tracing_is_off() -> None:
+    """genkit_otel.tracer opens a no-op span when nothing is configured."""
     with tracer.start_as_current_span('generate_images') as span:
         ctx = span.get_span_context()
         assert ctx.trace_id == 0
 
 
 @pytest.mark.asyncio
-async def test_imagen_tracer_records_on_their_tracer_provider() -> None:
-    """OtelInstrumentation(tracer_provider=theirs): Imagen's tracer writes to theirs."""
+async def test_tracer_records_on_their_tracer_provider() -> None:
+    """OtelInstrumentation(tracer_provider=theirs): tracer writes to theirs."""
     theirs = TracerProvider()
     cloud = InMemorySpanExporter()
     theirs.add_span_processor(SimpleSpanProcessor(cloud))
@@ -558,7 +538,7 @@ def test_importing_genkit_does_not_start_a_tracer() -> None:
     script = """
 from opentelemetry import trace
 from genkit import Genkit  # noqa: F401
-from genkit._core._telemetry._exporters import is_placeholder_provider
+from genkit_otel._exporters import is_placeholder_provider
 from genkit._core._telemetry._instrumentation import is_instrumented_by
 from genkit_otel import OtelInstrumentation
 

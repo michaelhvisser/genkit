@@ -21,11 +21,10 @@ import inspect
 import json
 import re
 import time
-from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from contextvars import ContextVar
 from typing import Any, ClassVar, Generic, NamedTuple, cast, get_type_hints
 
-from opentelemetry.util import types as otel_types
 from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
 from pydantic.alias_generators import to_camel
 from typing_extensions import TypeVar
@@ -41,8 +40,7 @@ from genkit._core._telemetry._instrumentation import SpanContext, run_in_new_spa
 # Span attribute types and tracing helpers
 # =============================================================================
 
-# Type alias for span attribute values
-SpanAttributeValue = otel_types.AttributeValue
+SpanAttributeValue = str | bool | int | float | Sequence[str] | Sequence[bool] | Sequence[int] | Sequence[float]
 
 
 def _record_latency(output: object, latency_ms: float) -> object:

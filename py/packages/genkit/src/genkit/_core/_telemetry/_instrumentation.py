@@ -198,6 +198,14 @@ def dispose_instrumentations() -> None:
             inst.dispose()
 
 
+def flush_instrumentations() -> None:
+    """Wait for in-flight exports on every configured backend."""
+    for inst in instrumentations:
+        flush = getattr(inst, 'flush', None)
+        if callable(flush):
+            flush()
+
+
 def reset_instrumentation() -> None:
     """Remove all providers. Tests and re-init."""
     dispose_instrumentations()

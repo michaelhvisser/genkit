@@ -102,9 +102,10 @@ class OtelSpanContext:
 class OtelInstrumentation:
     """OpenTelemetry provider for Cloud Trace and a host APM.
 
-    Records each action as a span with ``genkit:*`` attributes. Pass
-    ``tracer_provider`` to mint on that provider. Omit it to use the
-    process-global provider. Cloud exporters hang on the global.
+    Records each action as a span with ``genkit:*`` attributes. Omit
+    ``tracer_provider`` to mint on the process-global provider — the
+    one they already registered, if any. Cloud Trace is
+    ``enable_google_cloud_telemetry()``.
 
     The Developer UI collector is a separate HTTP poster.
     """
@@ -171,3 +172,8 @@ class OtelInstrumentation:
                     raise
         finally:
             parent_path_context.reset(path_token)
+
+    def flush(self) -> None:
+        provider = self._tracer_provider or trace_api.get_tracer_provider()
+        if isinstance(provider, TracerProvider):
+            provider.force_flush()

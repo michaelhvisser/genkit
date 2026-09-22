@@ -32,19 +32,19 @@ from unittest import mock
 from unittest.mock import MagicMock, patch
 
 import pytest
-from opentelemetry import trace as trace_api
-from opentelemetry.sdk.trace import Event, ReadableSpan
-from opentelemetry.sdk.trace.export import BatchSpanProcessor, SimpleSpanProcessor, SpanExportResult
-from structlog.testing import capture_logs
-
-from genkit._core._environment import GENKIT_ENV, GenkitEnvironment
-from genkit._core._telemetry._default_exporter import (
+from genkit_otel._default_exporter import (
     EXPORT_TIMEOUT_SECONDS,
     TraceServerExporter,
     create_span_processor,
     extract_span_data,
     init_telemetry_server_exporter,
 )
+from opentelemetry import trace as trace_api
+from opentelemetry.sdk.trace import Event, ReadableSpan
+from opentelemetry.sdk.trace.export import BatchSpanProcessor, SimpleSpanProcessor, SpanExportResult
+from structlog.testing import capture_logs
+
+from genkit._core._environment import GENKIT_ENV, GenkitEnvironment
 from genkit._core._typing import TraceData
 
 # =============================================================================
@@ -173,7 +173,7 @@ def test_telemetry_server_exporter_force_flush_respects_timeout() -> None:
         return mock_urlopen_response()
 
     with patch(
-        'genkit._core._telemetry._default_exporter.urllib.request.urlopen',
+        'genkit_otel._default_exporter.urllib.request.urlopen',
         side_effect=blocking_urlopen,
     ):
         exporter = TraceServerExporter(telemetry_server_url='http://localhost:4000')
@@ -184,7 +184,7 @@ def test_telemetry_server_exporter_force_flush_respects_timeout() -> None:
         assert exporter.force_flush(timeout_millis=2000) is True
 
 
-@patch('genkit._core._telemetry._default_exporter.urllib.request.urlopen')
+@patch('genkit_otel._default_exporter.urllib.request.urlopen')
 def test_telemetry_server_exporter_export_sends_http_post(mock_urlopen: MagicMock) -> None:
     """Test that export sends HTTP POST requests for each span."""
     mock_urlopen.return_value = mock_urlopen_response()
@@ -204,7 +204,7 @@ def test_telemetry_server_exporter_export_sends_http_post(mock_urlopen: MagicMoc
     assert request.get_method() == 'POST'
 
 
-@patch('genkit._core._telemetry._default_exporter.urllib.request.urlopen')
+@patch('genkit_otel._default_exporter.urllib.request.urlopen')
 def test_telemetry_server_exporter_export_groups_same_trace(mock_urlopen: MagicMock) -> None:
     """A batch of spans on one trace is one POST — BatchSpanProcessor flushes a whole flow."""
     mock_urlopen.return_value = mock_urlopen_response()
@@ -228,7 +228,7 @@ def test_telemetry_server_exporter_export_groups_same_trace(mock_urlopen: MagicM
     assert body['displayName'] == 'root'
 
 
-@patch('genkit._core._telemetry._default_exporter.urllib.request.urlopen')
+@patch('genkit_otel._default_exporter.urllib.request.urlopen')
 def test_telemetry_server_exporter_export_posts_once_per_trace(mock_urlopen: MagicMock) -> None:
     """Two traces in one batch are two POSTs, not one per span."""
     mock_urlopen.return_value = mock_urlopen_response()
@@ -283,7 +283,7 @@ def test_export_does_not_stall_on_hung_collector() -> None:
         raise urllib.error.URLError('hung')
 
     with patch(
-        'genkit._core._telemetry._default_exporter.urllib.request.urlopen',
+        'genkit_otel._default_exporter.urllib.request.urlopen',
         side_effect=blocking_urlopen,
     ):
         exporter = TraceServerExporter(telemetry_server_url='http://127.0.0.1:9')
@@ -310,7 +310,7 @@ def test_shutdown_does_not_wait_out_hung_post() -> None:
         return mock_urlopen_response()
 
     with patch(
-        'genkit._core._telemetry._default_exporter.urllib.request.urlopen',
+        'genkit_otel._default_exporter.urllib.request.urlopen',
         side_effect=blocking_urlopen,
     ):
         exporter = TraceServerExporter(telemetry_server_url='http://127.0.0.1:9')
@@ -335,7 +335,7 @@ def test_batch_stops_after_first_trace_failure() -> None:
         return mock_urlopen_response()
 
     with patch(
-        'genkit._core._telemetry._default_exporter.urllib.request.urlopen',
+        'genkit_otel._default_exporter.urllib.request.urlopen',
         side_effect=flaky_urlopen,
     ):
         exporter = TraceServerExporter(telemetry_server_url='http://localhost:4000')
@@ -363,7 +363,7 @@ def test_worker_survives_unexpected_post_error() -> None:
         return mock_urlopen_response()
 
     with patch(
-        'genkit._core._telemetry._default_exporter.urllib.request.urlopen',
+        'genkit_otel._default_exporter.urllib.request.urlopen',
         side_effect=flaky_urlopen,
     ):
         exporter = TraceServerExporter(telemetry_server_url='http://localhost:4000')
@@ -394,7 +394,7 @@ def test_export_encode_bug_is_loud() -> None:
     assert not [e for e in entries if 'Failed to save trace' in str(e.get('event', ''))]
 
 
-@patch('genkit._core._telemetry._default_exporter.urllib.request.urlopen')
+@patch('genkit_otel._default_exporter.urllib.request.urlopen')
 def test_export_skips_non_json_attribute(mock_urlopen: MagicMock) -> None:
     """A bytes attribute is dropped; generate() returns and the rest of the trace POSTs."""
     mock_urlopen.return_value = mock_urlopen_response()

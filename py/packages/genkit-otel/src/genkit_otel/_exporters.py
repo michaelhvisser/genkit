@@ -31,9 +31,9 @@ from opentelemetry.trace import Link, NoOpTracer, NoOpTracerProvider, ProxyTrace
 from opentelemetry.util import types
 
 from genkit._core._logger import get_logger
+from genkit._core._telemetry._instrumentation import instrumentations
 
 from ._default_exporter import create_span_processor
-from ._instrumentation import instrumentations
 
 logger = get_logger(__name__)
 
@@ -107,8 +107,8 @@ class PluginTracer:
         set_status_on_exception: bool = True,
         end_on_exit: bool = True,
     ) -> AbstractContextManager[Span]:
-        # Imagen and Veo open their spans on this name. Keep it a real method
-        # so those call sites stay valid even when no provider is minting yet.
+        # A real method so a plugin can open a span before a provider is
+        # minting. Uninstrumented, this is a no-op span.
         return self.inner().start_as_current_span(
             name,
             context=context,

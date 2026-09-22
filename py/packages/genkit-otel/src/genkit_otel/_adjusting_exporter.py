@@ -27,8 +27,7 @@ from opentelemetry.trace import StatusCode
 from opentelemetry.util.types import Attributes, AttributeValue
 
 from genkit._core._compat import override
-
-from ._attrs import Attr, Subtype
+from genkit._core._telemetry._attrs import Attr, Subtype
 
 
 def _copy_attrs(span: ReadableSpan) -> dict[str, AttributeValue]:
