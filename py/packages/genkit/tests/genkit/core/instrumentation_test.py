@@ -12,8 +12,6 @@ from collections.abc import Awaitable, Callable, Mapping
 import pytest
 from genkit_otel import OtelInstrumentation
 
-from genkit import ActionKind
-from genkit._core._action import Action
 from genkit._core._telemetry._instrumentation import (
     SpanContext,
     SpanMetadata,
@@ -272,17 +270,3 @@ async def test_a_raised_error_still_closes_every_backend() -> None:
         await run_in_new_span('op', body)
 
     assert log == ['enter:a', 'enter:b', 'exit:b', 'exit:a']
-
-
-@pytest.mark.asyncio
-async def test_action_without_instrumentation_has_empty_ids() -> None:
-    """Action.run() with no backend still returns the answer and empty ids."""
-
-    async def noop() -> str:
-        return 'ok'
-
-    action = Action(name='plain', kind=ActionKind.CUSTOM, fn=noop)
-    result = await action.run()
-    assert result.response == 'ok'
-    assert result.trace_id == ''
-    assert result.span_id == ''

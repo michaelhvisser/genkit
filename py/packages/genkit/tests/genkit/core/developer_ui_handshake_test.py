@@ -147,10 +147,10 @@ async def test_handshake_url_in_dev_turns_tracing_on(
 
 
 @pytest.mark.asyncio
-async def test_stale_collector_env_does_not_override_handshake_url(
+async def test_leftover_collector_env_does_not_block_todays_handshake_url(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Today's genkit start handshake URL wins over a GENKIT_TELEMETRY_SERVER already in the shell."""
+    """Leftover GENKIT_TELEMETRY_SERVER, no poster yet: today's handshake URL still fills the Traces tab."""
     stale_server, stale_posts = _start_collector()
     live_server, live_posts = _start_collector()
     stale_url = f'http://127.0.0.1:{stale_server.server_address[1]}'
@@ -207,10 +207,10 @@ async def test_notify_url_in_dev_turns_tracing_on(monkeypatch: pytest.MonkeyPatc
 
 
 @pytest.mark.asyncio
-async def test_cloud_already_on_still_posts_handshake_traces_to_developer_ui(
+async def test_handshake_still_fills_the_traces_tab_when_otel_is_already_on(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Cloud spans are already on; the handshake URL still fills the Developer UI Traces tab."""
+    """OtelInstrumentation is already on; handshake still POSTs to the Developer UI."""
     monkeypatch.setenv(GENKIT_ENV, 'dev')
     server, posts = _start_collector()
     url = f'http://127.0.0.1:{server.server_address[1]}'

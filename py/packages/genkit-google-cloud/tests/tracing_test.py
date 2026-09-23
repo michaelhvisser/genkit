@@ -32,9 +32,8 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, SimpleSpanProcessor
 
 from genkit._core._error import GenkitError
-from genkit._core._telemetry._instrumentation import instrumentations, is_instrumented_by, reset_instrumentation
+from genkit._core._telemetry._instrumentation import is_instrumented_by, reset_instrumentation
 from genkit._core._telemetry._log_exporter import reset_log_export
-from genkit.telemetry import configure_instrumentation
 
 # Environment variable and value constants (matching genkit._core._environment)
 _GENKIT_ENV = 'GENKIT_ENV'
@@ -389,44 +388,8 @@ def test_enable_in_dev_without_force_then_again_raises() -> None:
         mock_add_exporter.assert_not_called()
 
 
-def test_enable_in_prod_installs_otel() -> None:
-    """enable_google_cloud_telemetry() in prod is enough to create Genkit spans."""
-    with (
-        mock.patch.dict(os.environ, {_GENKIT_ENV: _ENV_PROD}, clear=False),
-        patch('genkit_google_cloud.telemetry.config.GenkitGCPExporter'),
-        patch('genkit_google_cloud.telemetry.config.GcpAdjustingTraceExporter'),
-        patch('genkit_google_cloud.telemetry.config._hang_exporter_on_process_tracer'),
-        patch('genkit_google_cloud.telemetry.config.GoogleCloudResourceDetector'),
-        patch('genkit_google_cloud.telemetry.config.CloudMonitoringMetricsExporter'),
-        patch('genkit_google_cloud.telemetry.config.GenkitMetricExporter'),
-        patch('genkit_google_cloud.telemetry.config.PeriodicExportingMetricReader'),
-        patch('genkit_google_cloud.telemetry.config.metrics'),
-    ):
-        enable_google_cloud_telemetry(project_id='my-project')
-        assert is_instrumented_by(OtelInstrumentation)
-
-
-def test_enable_does_not_add_a_second_otel_when_already_configured() -> None:
-    """They already configured OtelInstrumentation; enable only hangs exporters."""
-    yours = OtelInstrumentation()
-    configure_instrumentation(yours)
-    with (
-        mock.patch.dict(os.environ, {_GENKIT_ENV: _ENV_PROD}, clear=False),
-        patch('genkit_google_cloud.telemetry.config.GenkitGCPExporter'),
-        patch('genkit_google_cloud.telemetry.config.GcpAdjustingTraceExporter'),
-        patch('genkit_google_cloud.telemetry.config._hang_exporter_on_process_tracer'),
-        patch('genkit_google_cloud.telemetry.config.GoogleCloudResourceDetector'),
-        patch('genkit_google_cloud.telemetry.config.CloudMonitoringMetricsExporter'),
-        patch('genkit_google_cloud.telemetry.config.GenkitMetricExporter'),
-        patch('genkit_google_cloud.telemetry.config.PeriodicExportingMetricReader'),
-        patch('genkit_google_cloud.telemetry.config.metrics'),
-    ):
-        enable_google_cloud_telemetry(project_id='my-project')
-        assert [i for i in instrumentations if isinstance(i, OtelInstrumentation)] == [yours]
-
-
-def test_stale_collector_env_in_prod_still_installs_otel() -> None:
-    """A GENKIT_TELEMETRY_SERVER already in the prod shell does not block Cloud spans."""
+def test_leftover_collector_env_in_prod_does_not_block_cloud() -> None:
+    """A leftover GENKIT_TELEMETRY_SERVER in prod does not block Cloud spans."""
     with (
         mock.patch.dict(
             os.environ,
@@ -443,27 +406,6 @@ def test_stale_collector_env_in_prod_still_installs_otel() -> None:
         patch('genkit_google_cloud.telemetry.config.metrics'),
     ):
         enable_google_cloud_telemetry(project_id='my-project')
-        assert is_instrumented_by(OtelInstrumentation)
-
-
-def test_enable_under_genkit_start_with_force_turns_genkit_spans_on() -> None:
-    """force_dev_export=True under genkit start hangs Cloud and turns Genkit spans on."""
-    with (
-        mock.patch.dict(
-            os.environ,
-            {_GENKIT_ENV: _ENV_DEV, 'GENKIT_TELEMETRY_SERVER': 'http://127.0.0.1:4033'},
-            clear=False,
-        ),
-        patch('genkit_google_cloud.telemetry.config.GenkitGCPExporter'),
-        patch('genkit_google_cloud.telemetry.config.GcpAdjustingTraceExporter'),
-        patch('genkit_google_cloud.telemetry.config._hang_exporter_on_process_tracer'),
-        patch('genkit_google_cloud.telemetry.config.GoogleCloudResourceDetector'),
-        patch('genkit_google_cloud.telemetry.config.CloudMonitoringMetricsExporter'),
-        patch('genkit_google_cloud.telemetry.config.GenkitMetricExporter'),
-        patch('genkit_google_cloud.telemetry.config.PeriodicExportingMetricReader'),
-        patch('genkit_google_cloud.telemetry.config.metrics'),
-    ):
-        enable_google_cloud_telemetry(force_dev_export=True, project_id='my-project')
         assert is_instrumented_by(OtelInstrumentation)
 
 

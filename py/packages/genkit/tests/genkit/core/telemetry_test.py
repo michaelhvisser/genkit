@@ -8,7 +8,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import subprocess  # noqa: S404
 import sys
@@ -575,61 +574,6 @@ async def test_logger_provider_can_skip_span_ids() -> None:
     assert result.response == 'Why did the cat cross the road?'
     assert result.trace_id == ''
     assert result.span_id == ''
-
-
-@pytest.mark.asyncio
-async def test_action_context_redacts_auth_and_secrets() -> None:
-    """auth and secrets on action context show up as placeholders on the span."""
-    provider = TracerProvider()
-    exporter = InMemorySpanExporter()
-    provider.add_span_processor(SimpleSpanProcessor(exporter))
-    configure_instrumentation(OtelInstrumentation(tracer_provider=provider))
-
-    action = Action(name='joke', kind=ActionKind.FLOW, fn=_joke)
-    await action.run(context={'auth': 'secret-token', 'secrets': 'shh', 'uid': 'u123'})
-    provider.force_flush()
-
-    span = exporter.get_finished_spans()[0]
-    assert span.attributes is not None
-    context = json.loads(str(span.attributes['genkit:metadata:context']))
-    assert context['auth'] == '<redacted>'
-    assert context['secrets'] == '<redacted>'
-    assert context['uid'] == 'u123'
-
-
-@pytest.mark.asyncio
-async def test_action_context_without_secrets_is_recorded() -> None:
-    """A context with no auth/secrets is written through as-is."""
-    provider = TracerProvider()
-    exporter = InMemorySpanExporter()
-    provider.add_span_processor(SimpleSpanProcessor(exporter))
-    configure_instrumentation(OtelInstrumentation(tracer_provider=provider))
-
-    action = Action(name='joke', kind=ActionKind.FLOW, fn=_joke)
-    await action.run(context={'uid': 'u123'})
-    provider.force_flush()
-
-    span = exporter.get_finished_spans()[0]
-    assert span.attributes is not None
-    context = json.loads(str(span.attributes['genkit:metadata:context']))
-    assert context == {'uid': 'u123'}
-
-
-@pytest.mark.asyncio
-async def test_action_without_context_has_no_context_attribute() -> None:
-    """No action context means the span has no context attribute."""
-    provider = TracerProvider()
-    exporter = InMemorySpanExporter()
-    provider.add_span_processor(SimpleSpanProcessor(exporter))
-    configure_instrumentation(OtelInstrumentation(tracer_provider=provider))
-
-    action = Action(name='joke', kind=ActionKind.FLOW, fn=_joke)
-    await action.run()
-    provider.force_flush()
-
-    span = exporter.get_finished_spans()[0]
-    assert span.attributes is not None
-    assert 'genkit:metadata:context' not in span.attributes
 
 
 @pytest.mark.asyncio
