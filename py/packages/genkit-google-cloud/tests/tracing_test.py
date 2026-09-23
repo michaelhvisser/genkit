@@ -33,6 +33,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor, SimpleSpanProcess
 
 from genkit._core._error import GenkitError
 from genkit._core._telemetry._instrumentation import instrumentations, is_instrumented_by, reset_instrumentation
+from genkit._core._telemetry._log_exporter import reset_log_export
 from genkit.telemetry import configure_instrumentation
 
 # Environment variable and value constants (matching genkit._core._environment)
@@ -44,9 +45,11 @@ _ENV_PROD = 'prod'
 @pytest.fixture(autouse=True)
 def _reset_instrumentation() -> Generator[None, None, None]:
     reset_instrumentation()
+    reset_log_export()
     _reset_google_cloud_telemetry()
     yield
     reset_instrumentation()
+    reset_log_export()
     _reset_google_cloud_telemetry()
 
 
@@ -443,8 +446,8 @@ def test_stale_collector_env_in_prod_still_installs_otel() -> None:
         assert is_instrumented_by(OtelInstrumentation)
 
 
-def test_enable_under_genkit_start_does_not_install_otel() -> None:
-    """Under genkit start, enable leaves the Developer UI collector to Genkit()."""
+def test_enable_under_genkit_start_with_force_turns_genkit_spans_on() -> None:
+    """force_dev_export=True under genkit start hangs Cloud and turns Genkit spans on."""
     with (
         mock.patch.dict(
             os.environ,
@@ -461,7 +464,7 @@ def test_enable_under_genkit_start_does_not_install_otel() -> None:
         patch('genkit_google_cloud.telemetry.config.metrics'),
     ):
         enable_google_cloud_telemetry(force_dev_export=True, project_id='my-project')
-        assert not is_instrumented_by(OtelInstrumentation)
+        assert is_instrumented_by(OtelInstrumentation)
 
 
 def _processors(provider: TracerProvider) -> tuple[object, ...]:

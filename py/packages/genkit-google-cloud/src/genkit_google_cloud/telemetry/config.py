@@ -269,8 +269,6 @@ class GcpTelemetry:
             _hang_exporter_on_process_tracer(exporter=trace_exporter)
             if is_instrumented_by(OtelInstrumentation):
                 return
-            if is_dev_environment() and os.environ.get('GENKIT_TELEMETRY_SERVER'):
-                return
             configure_instrumentation(OtelInstrumentation())
         except Exception as e:
             handle_tracing_error(e)
